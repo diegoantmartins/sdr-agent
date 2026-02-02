@@ -1,0 +1,304 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============== CORE ENTITIES ===============
+
+model ActiveLead {
+  id                String    @id @default(cuid())
+  
+  // Identificação
+  phone             String    @unique
+  name              String
+  email             String?
+  company           String?
+  
+  // Scoring & Intent
+  score             Int       @default(0) // 0-100
+  intentClassified  IntentType?
+  
+  // Conversação
+  firstMessageAt    DateTime  @default(now())
+  lastMessageAt     DateTime  @default(now()) @updatedAt
+  messageCount      Int       @default(1)
+  
+  // Status no Fluxo
+  status            LeadStatus @default(TRIAGE)
+  conversionStage   String?   // "awareness" | "consideration" | "decision"
+  
+  // Chatwoot Sync
+  chatwootContactId String?   @unique
+  chatwootConvId    String?   @unique
+  syncedAt          DateTime?
+  
+  // Relationships
+  messages          Message[]
+  labels            SystemLabel[]
+  notes             Note[]
+  
+  // Metadata
+  source            String    @default("whatsapp") // "whatsapp" | "website" | "manual"
+  campaignId        String?
+  tags              String[]  @default([])
+  metadata          Json      @default("{}")
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([phone])
+  @@index([status])
+  @@index([score])
+  @@index([lastMessageAt])
+  @@index([status, lastMessageAt])
+  @@index([score, status])
+  @@index([createdAt])
+}
+
+model ColdLead {
+  id                String    @id @default(cuid())
+  
+  // Referência ao original
+  originalLeadId    String?
+  
+  // Dados
+  phone             String
+  name              String
+  email             String?
+  company           String?
+  
+  // Contexto congelado
+  lastScore         Int
+  lastStatus        String
+  conversationData  Json      // Dump completo para reativação
+  
+  // Timeline
+  archivedAt        DateTime  @default(now())
+  freezeReason      String    // "no_response_7d" | "manual_archive" | "low_score"
+  
+  // Reativação
+  reactivationCount Int       @default(0)
+  lastReactivatedAt DateTime?
+  
+  // Chatwoot
+  chatwootConvId    String?
+  
+  metadata          Json      @default("{}")
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([phone])
+  @@index([archivedAt])
+  @@index([freezeReason])
+  @@index([createdAt])
+}
+
+// =============== MESSAGE LOG ===============
+
+model Message {
+  id                String    @id @default(cuid())
+  
+  leadId            String
+  lead              ActiveLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  // Conteúdo
+  content           String
+  type              MessageType // "incoming" | "outgoing"
+  
+  // Processamento
+  isAiGenerated     Boolean   @default(false)
+  scoreChange       Int       @default(0)
+  intentDetected    String?
+  
+  // Sync com Chatwoot
+  chatwootMessageId String?   @unique
+  syncStatus        SyncStatus @default(PENDING)
+  syncError         String?
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([leadId])
+  @@index([createdAt])
+  @@index([syncStatus])
+  @@index([leadId, createdAt])
+}
+
+// =============== LABELS (Etiquetas do Chatwoot) ===============
+
+model SystemLabel {
+  id                String    @id @default(cuid())
+  
+  // Label Details
+  title             String    @unique
+  emoji             String
+  color             String    // "#ff0000"
+  
+  // Mapping
+  chatwootLabelId   String?   @unique
+  category          LabelCategory
+  
+  // Sync Status
+  syncedAt          DateTime?
+  lastVerifiedAt    DateTime?
+  
+  // Relationships
+  leads             ActiveLead[]
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([title])
+  @@index([category])
+}
+
+// =============== NOTES & METADATA ===============
+
+model Note {
+  id                String    @id @default(cuid())
+  
+  leadId            String
+  lead              ActiveLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  // Content
+  content           String
+  type              NoteType  // "private" | "sales_note" | "system"
+  
+  // Chatwoot Integration
+  chatwootNoteId    String?   @unique
+  postedToChat      Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([leadId])
+  @@index([createdAt])
+}
+
+model JobLog {
+  id                String    @id @default(cuid())
+  
+  // Job Info
+  jobType           String
+  status            JobStatus
+  
+  // Execution
+  leadsProcessed    Int       @default(0)
+  leadsSkipped      Int       @default(0)
+  error             String?
+  
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  duration          Int?      // em ms
+  
+  @@index([jobType])
+  @@index([startedAt])
+  @@index([status])
+}
+
+// =============== ANALYTICS & METRICS ===============
+
+model ConversationMetric {
+  id                String    @id @default(cuid())
+  
+  leadId            String
+  
+  // Timing
+  firstResponseTime Int?      // em segundos
+  avgResponseTime   Int?      // em segundos
+  totalDuration     Int?      // em segundos
+  
+  // Engagement
+  messageCount      Int       @default(0)
+  userMessageCount  Int       @default(0)
+  aiMessageCount    Int       @default(0)
+  
+  // Outcome
+  converted         Boolean   @default(false)
+  conversionTime    Int?      // em segundos até conversão
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([leadId])
+  @@index([converted])
+  @@index([createdAt])
+}
+
+model SystemHealth {
+  id                String    @id @default(cuid())
+  
+  // API Health
+  chatwootStatus    String    @default("unknown") // "healthy" | "degraded" | "down"
+  openaiStatus      String    @default("unknown")
+  uazapiStatus      String    @default("unknown")
+  
+  // Database Health
+  dbConnections     Int       @default(0)
+  dbLatency         Int       @default(0) // em ms
+  
+  // Queue Status
+  queueLength       Int       @default(0)
+  
+  // Last checks
+  lastChecked       DateTime  @default(now())
+  
+  @@index([lastChecked])
+}
+
+// =============== ENUMS ===============
+
+enum IntentType {
+  BUY_NOW
+  TRIAGE
+  SUPPORT
+}
+
+enum LeadStatus {
+  TRIAGE      // Conversando com IA, score em desenvolvimento
+  HOT         // Score > 80 ou BUY_NOW detected
+  FOLLOW_UP   // Esperando resposta > 24h
+  COLD        // Movido para cold storage
+  ARCHIVED    // Deletado logicamente
+  OPEN        // Humano assumiu
+}
+
+enum MessageType {
+  incoming
+  outgoing
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+  RETRY
+}
+
+enum LabelCategory {
+  urgency    // 🔴 Vermelho
+  status     // 🔵 Azul
+  attention  // 🟡 Amarelo
+  archive    // ⚪ Cinza
+  business   // 🟢 Verde
+}
+
+enum NoteType {
+  private
+  sales_note
+  system
+  summary
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}

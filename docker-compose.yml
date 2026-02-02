@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # ========== PostgreSQL ==========
+  postgres:
+    image: postgres:16-alpine
+    container_name: vizimed-postgres
+    environment:
+      POSTGRES_USER: vizimed
+      POSTGRES_PASSWORD: vizimed_password
+      POSTGRES_DB: vizimed
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vizimed"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vizimed-network
+
+  # ========== MongoDB (para Agenda) ==========
+  mongodb:
+    image: mongo:6.0
+    container_name: vizimed-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: mongodb_password
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vizimed-network
+
+  # ========== Redis (para Cache/Queue) ==========
+  redis:
+    image: redis:7-alpine
+    container_name: vizimed-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vizimed-network
+
+  # ========== Agent App (apenas config, não start automático) ==========
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vizimed-agent
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://vizimed:vizimed_password@postgres:5432/vizimed
+      MONGODB_URL: mongodb://root:mongodb_password@mongodb:27017/vizimed-agenda?authSource=admin
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vizimed-network
+    profiles:
+      - manual
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  vizimed-network:
+    driver: bridge

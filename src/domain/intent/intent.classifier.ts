@@ -44,10 +44,12 @@ const INTENT_KEYWORDS = {
 };
 
 export class IntentClassifier {
-  private openai: OpenAI;
+  private openai?: OpenAI;
 
   constructor(apiKey: string, private model: string = 'gpt-4o-mini') {
-    this.openai = new OpenAI({ apiKey });
+    if (apiKey) {
+      this.openai = new OpenAI({ apiKey });
+    }
   }
 
   async classify(message: string): Promise<ClassificationResult> {
@@ -58,6 +60,15 @@ export class IntentClassifier {
     if (patternResult.confidence > 0.8) {
       logger.debug(`[IntentClassifier] Pattern match: ${patternResult.intent}`);
       return patternResult;
+    }
+
+    if (!this.openai) {
+      logger.warn('[IntentClassifier] OpenAI não configurado, usando TRIAGE fallback');
+      return {
+        intent: 'TRIAGE',
+        confidence: 0.4,
+        reasoning: 'OpenAI API key ausente, usando fallback'
+      };
     }
 
     // Passo 2: LLM classification (fallback)
@@ -110,6 +121,10 @@ export class IntentClassifier {
   }
 
   private async classifyWithLLM(message: string): Promise<ClassificationResult> {
+    if (!this.openai) {
+      throw new Error('OpenAI client não configurado');
+    }
+
     const completion = await this.openai.chat.completions.create({
       model: this.model,
       messages: [

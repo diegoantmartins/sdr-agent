@@ -83,6 +83,7 @@ async function initializeApp(): Promise<FastifyInstance> {
 
       // 2. Salvar mensagem (tratar duplicatas de chatwootMessageId)
       let messageRecord;
+      let isNewMessage = false;
       try {
         messageRecord = await prisma.message.create({
           data: {
@@ -92,6 +93,7 @@ async function initializeApp(): Promise<FastifyInstance> {
             chatwootMessageId: messageId
           }
         });
+        isNewMessage = true;
       } catch (err: any) {
         // P2002 = Unique constraint failed
         if (err.code === 'P2002' && err.meta?.target?.includes('chatwootMessageId')) {
@@ -100,6 +102,10 @@ async function initializeApp(): Promise<FastifyInstance> {
         } else {
           throw err;
         }
+      }
+
+      if (isNewMessage) {
+        await leadService.incrementMessageCount(phone);
       }
 
       // 3. Sincronizar com Chatwoot (async, não bloqueia resposta)

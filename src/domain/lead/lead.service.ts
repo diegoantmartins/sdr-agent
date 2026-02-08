@@ -83,7 +83,20 @@ export class LeadService {
         score: data.score !== undefined ? data.score : lead.score,
         status: data.status || lead.status,
         conversionStage: data.conversionStage || lead.conversionStage,
+        intentClassified: data.intentClassified !== undefined ? data.intentClassified : lead.intentClassified,
         metadata: data.metadata ? { ...lead.metadata as any, ...data.metadata } : lead.metadata
+      }
+    });
+  }
+
+  async incrementMessageCount(phone: string): Promise<ActiveLead> {
+    const lead = await this.getLeadOrThrow(phone);
+
+    return this.prisma.activeLead.update({
+      where: { id: lead.id },
+      data: {
+        messageCount: { increment: 1 },
+        lastMessageAt: new Date()
       }
     });
   }

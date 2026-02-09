@@ -68,6 +68,10 @@ async function initializeApp(): Promise<FastifyInstance> {
     try {
       const { phone, name, message, messageId, timestamp } = request.body as any;
 
+      if (!phone || !message) {
+        return reply.code(400).send({ error: 'phone e message são obrigatórios' });
+      }
+
       logger.info(`[WEBHOOK:UAZAPI] Mensagem recebida de ${phone}`);
 
       // 1. Criar ou buscar lead

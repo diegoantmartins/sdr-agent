@@ -19,6 +19,7 @@ import {
   PROVIDER_CAPABILITIES
 } from './domain/integrations/integration.types';
 import { AppError, ValidationError } from './shared/utils/errors';
+import { commercialEngineService } from './services/commercial/commercial-engine.service';
 
 // Instâncias globais
 let prisma: PrismaClient;
@@ -33,6 +34,57 @@ function parseAllowedOrigins(originsCsv?: string): string[] {
     .split(',')
     .map(item => item.trim())
     .filter(Boolean);
+}
+
+function getTenantIdFromHeaders(headers: Record<string, any>): string {
+  const tenantIdHeader = headers['x-tenant-id'];
+  const tenantId = Array.isArray(tenantIdHeader) ? tenantIdHeader[0] : tenantIdHeader;
+  if (!tenantId || typeof tenantId !== 'string') {
+    throw new ValidationError('x-tenant-id é obrigatório');
+  }
+  return tenantId;
+}
+
+function getIntegrationApiKeys(): string[] {
+  return (config.INTEGRATION_API_KEYS || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function assertIntegrationKey(headers: Record<string, any>): void {
+  const allowedKeys = getIntegrationApiKeys();
+  if (allowedKeys.length === 0) {
+    throw new ValidationError('INTEGRATION_API_KEYS não configurado');
+  }
+
+  const raw = headers['x-integration-key'];
+  const providedKey = Array.isArray(raw) ? raw[0] : raw;
+  if (!providedKey || !allowedKeys.includes(String(providedKey))) {
+    throw new ValidationError('x-integration-key inválido');
+  }
+}
+
+async function auditEvent(
+  tenantId: string,
+  action: string,
+  success: boolean,
+  metadata: Record<string, any> = {},
+  actor?: string
+): Promise<void> {
+  try {
+    await prisma.governanceAudit.create({
+      data: {
+        tenantId,
+        action,
+        actor,
+        success,
+        metadata
+      }
+    });
+  } catch (error) {
+    logger.warn('[GovernanceAudit] falha ao registrar evento', { tenantId, action, error: String(error) });
+  }
 }
 
 async function connectWithRetry(client: PrismaClient): Promise<void> {
@@ -137,6 +189,7 @@ async function initializeApp(): Promise<FastifyInstance> {
         return reply.code(401).send({ error: 'unauthorized webhook' });
       }
 
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const { phone, name, message, messageId, timestamp } = request.body as any;
 
       if (!phone || !message) {
@@ -146,10 +199,11 @@ async function initializeApp(): Promise<FastifyInstance> {
       logger.info(`[WEBHOOK:UAZAPI] Mensagem recebida de ${phone}`);
 
       // 1. Criar ou buscar lead
-      let lead = await leadService.getLead(phone);
+      let lead = await leadService.getLead(tenantId, phone);
 
       if (!lead) {
         lead = await leadService.createLead({
+          tenantId,
           phone,
           name: name || 'Lead sem nome',
           source: 'whatsapp'
@@ -162,6 +216,7 @@ async function initializeApp(): Promise<FastifyInstance> {
       try {
         messageRecord = await prisma.message.create({
           data: {
+            tenantId,
             leadId: lead.id,
             content: message,
             type: 'incoming',
@@ -180,11 +235,12 @@ async function initializeApp(): Promise<FastifyInstance> {
       }
 
       if (isDuplicate) {
+        await auditEvent(tenantId, 'webhook_uazapi_duplicate', true, { phone, messageId });
         return reply.code(200).send({ success: true, messageId, duplicate: true });
       }
 
       // 2.1 Atualizar contadores e atividade do lead
-      await leadService.registerIncomingMessage(phone);
+      await leadService.registerIncomingMessage(tenantId, phone);
 
       // 3. Sincronizar com Chatwoot (async, não bloqueia resposta)
       chatService.syncMessage({
@@ -200,7 +256,7 @@ async function initializeApp(): Promise<FastifyInstance> {
       const intentResult = await intentClassifier.classify(message);
 
       // 5. Atualizar lead com intent
-      await leadService.updateLead(phone, {
+      await leadService.updateLead(tenantId, phone, {
         intentClassified: intentResult.intent,
         conversionStage: 'consideration'
       });
@@ -214,16 +270,17 @@ async function initializeApp(): Promise<FastifyInstance> {
       }
 
       if (scoreChange > 0) {
-        await leadService.incrementScore(phone, scoreChange);
+        await leadService.incrementScore(tenantId, phone, scoreChange);
       }
 
       // 7. Atualizar status se score for alto
-      const updatedLead = await leadService.getLead(phone);
+      const updatedLead = await leadService.getLead(tenantId, phone);
       if (updatedLead && updatedLead.score > 80 && intentResult.intent === 'BUY_NOW') {
-        await leadService.updateLead(phone, { status: 'HOT' });
+        await leadService.updateLead(tenantId, phone, { status: 'HOT' });
       }
 
       logger.info(`[WEBHOOK:UAZAPI] ✅ Mensagem processada - Intent: ${intentResult.intent}`);
+      await auditEvent(tenantId, 'webhook_uazapi_processed', true, { phone, intent: intentResult.intent });
       return reply.code(200).send({ success: true, messageId });
     } catch (error) {
       logger.error('[WEBHOOK:UAZAPI] ❌ Erro:', error);
@@ -243,6 +300,7 @@ async function initializeApp(): Promise<FastifyInstance> {
         return reply.code(401).send({ error: 'unauthorized webhook' });
       }
 
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const payload = request.body as any;
       const { message, conversation, contact } = payload;
 
@@ -253,9 +311,10 @@ async function initializeApp(): Promise<FastifyInstance> {
       logger.info(`[WEBHOOK:CHATWOOT] Mensagem no Chatwoot`);
 
       if (phone && messageContent) {
-        let lead = await leadService.getLead(phone);
+        let lead = await leadService.getLead(tenantId, phone);
         if (!lead) {
           lead = await leadService.createLead({
+            tenantId,
             phone,
             name,
             source: 'chatwoot'
@@ -264,6 +323,7 @@ async function initializeApp(): Promise<FastifyInstance> {
 
         await prisma.message.create({
           data: {
+            tenantId,
             leadId: lead.id,
             content: messageContent,
             type: message?.message_type === 1 ? 'outgoing' : 'incoming',
@@ -275,8 +335,15 @@ async function initializeApp(): Promise<FastifyInstance> {
           }
         });
 
-        await leadService.registerIncomingMessage(phone);
+        if (message?.message_type !== 1) {
+          await leadService.registerIncomingMessage(tenantId, phone);
+        }
       }
+
+      await auditEvent(tenantId, 'webhook_chatwoot_processed', true, {
+        hasPhone: Boolean(phone),
+        messageId: message?.id || payload?.id
+      });
 
       return reply.code(200).send({ success: true });
     } catch (error) {
@@ -288,7 +355,9 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Get Leads ==========
   app.get('/api/leads', async (request, reply) => {
     try {
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const leads = await prisma.activeLead.findMany({
+        where: { tenantId },
         take: 50,
         orderBy: { score: 'desc' }
       });
@@ -303,6 +372,7 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Create Lead ==========
   app.post('/api/leads', async (request, reply) => {
     try {
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const body = request.body as Record<string, any>;
       const { phone, name, email, company, source, campaignId, metadata } = body;
 
@@ -311,6 +381,7 @@ async function initializeApp(): Promise<FastifyInstance> {
       }
 
       const lead = await leadService.createLead({
+        tenantId,
         phone,
         name: name || 'Lead sem nome',
         email,
@@ -333,15 +404,16 @@ async function initializeApp(): Promise<FastifyInstance> {
     '/api/leads/:phone',
     async (request, reply) => {
       try {
+        const tenantId = getTenantIdFromHeaders(request.headers as any);
         const { phone } = request.params;
-        const lead = await leadService.getLead(phone);
+        const lead = await leadService.getLead(tenantId, phone);
 
         if (!lead) {
           return reply.code(404).send({ error: 'Lead not found' });
         }
 
         const messages = await prisma.message.findMany({
-          where: { leadId: lead.id },
+          where: { leadId: lead.id, tenantId },
           orderBy: { createdAt: 'desc' }
         });
 
@@ -356,7 +428,8 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Hot Leads ==========
   app.get('/api/leads/hot', async (request, reply) => {
     try {
-      const hotLeads = await leadService.getHotLeads();
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+      const hotLeads = await leadService.getHotLeads(tenantId);
       return reply.send({ leads: hotLeads });
     } catch (error) {
       logger.error('[API:HOT_LEADS] Erro:', error);
@@ -400,9 +473,13 @@ async function initializeApp(): Promise<FastifyInstance> {
 
         // Simular webhook do UAZAPI
         try {
+          const tenantId = getTenantIdFromHeaders(request.headers as any);
           const webhookResponse = await fetch('http://localhost:3000/webhooks/uazapi/message', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-tenant-id': tenantId
+            },
             body: JSON.stringify({
               phone,
               name: 'Teste',
@@ -533,6 +610,8 @@ async function initializeApp(): Promise<FastifyInstance> {
     Body: { action: IntegrationAction; payload: Record<string, any> };
   }>('/api/integrations/:provider/actions', async (request, reply) => {
     try {
+      assertIntegrationKey(request.headers as any);
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const { provider } = request.params;
       const { action, payload } = request.body || ({} as any);
 
@@ -550,6 +629,11 @@ async function initializeApp(): Promise<FastifyInstance> {
         payload: payload || {}
       });
 
+      await auditEvent(tenantId, 'integration_execute', result.success, {
+        provider,
+        action
+      });
+
       if (!result.success) {
         return reply.code(502).send(result);
       }
@@ -558,6 +642,52 @@ async function initializeApp(): Promise<FastifyInstance> {
     } catch (error) {
       logger.error('[API:INTEGRATIONS] Erro:', error);
       return reply.code(500).send({ error: String(error) });
+    }
+  });
+
+  // ========== API: Commercial Engine ==========
+  app.get('/api/commercial/templates', async (_request, reply) => {
+    return reply.send({ templates: commercialEngineService.getTemplates() });
+  });
+
+  app.get<{ Params: { niche: string } }>('/api/commercial/templates/:niche', async (request, reply) => {
+    try {
+      const template = commercialEngineService.getTemplateByNiche(request.params.niche);
+      return reply.send({ template });
+    } catch (error) {
+      logger.error('[API:COMMERCIAL:TEMPLATE] Erro:', error);
+      return reply.code(400).send({ error: String(error) });
+    }
+  });
+
+  app.post<{
+    Body: { niche: string; leadStage?: string; intent?: 'BUY_NOW' | 'SUPPORT' | 'TRIAGE'; score?: number }
+  }>('/api/commercial/next-action', async (request, reply) => {
+    try {
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+      const { niche, leadStage, intent, score } = request.body || ({} as any);
+      if (!niche) {
+        return reply.code(400).send({ error: 'niche é obrigatório' });
+      }
+
+      const recommendation = commercialEngineService.getNextBestAction({
+        niche,
+        leadStage,
+        intent,
+        score
+      });
+
+      await auditEvent(tenantId, 'commercial_next_action', true, {
+        niche,
+        leadStage,
+        intent,
+        score: score ?? null
+      });
+
+      return reply.send({ recommendation });
+    } catch (error) {
+      logger.error('[API:COMMERCIAL:NEXT_ACTION] Erro:', error);
+      return reply.code(400).send({ error: String(error) });
     }
   });
 

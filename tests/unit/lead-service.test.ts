@@ -7,6 +7,7 @@ describe('LeadService', () => {
       activeLead: {
         findUnique: vi.fn().mockResolvedValue({
           id: 'lead-1',
+          tenantId: 'tenant-a',
           phone: '5511999999999',
           name: 'Lead',
           email: null,
@@ -23,7 +24,7 @@ describe('LeadService', () => {
 
     const service = new LeadService(prisma);
 
-    await service.updateLead('5511999999999', {
+    await service.updateLead('tenant-a', '5511999999999', {
       intentClassified: 'BUY_NOW'
     });
 
@@ -44,11 +45,12 @@ describe('LeadService', () => {
     } as any;
 
     const service = new LeadService(prisma);
-    await service.getHotLeads();
+    await service.getHotLeads('tenant-a');
 
     expect(prisma.activeLead.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          tenantId: 'tenant-a',
           status: { in: ['HOT'] }
         })
       })

@@ -116,6 +116,16 @@ GET    /api/integrations/providers                # Lista provedores e ações s
 POST   /api/integrations/:provider/actions        # Executa ação de integração
 ```
 
+> Para endpoints multi-tenant use sempre o header `x-tenant-id`.
+> Para executar ações de integração use também `x-integration-key`.
+
+### Commercial Engine (motor universal)
+```bash
+GET    /api/commercial/templates                  # Templates por nicho
+GET    /api/commercial/templates/:niche           # Template específico (saude, juridico, saas...)
+POST   /api/commercial/next-action                # Next best action comercial
+```
+
 ### Webhooks
 ```bash
 POST   /webhooks/uazapi/message        # WhatsApp
@@ -138,6 +148,7 @@ GET    /test/chatwoot         # Testar Chatwoot
 ### 1. Criar Lead
 ```bash
 curl -X POST http://localhost:3000/api/leads \
+  -H "x-tenant-id: tenant-demo" \
   -H "Content-Type: application/json" \
   -d '{
     "phone": "5511999999999",
@@ -150,6 +161,7 @@ curl -X POST http://localhost:3000/api/leads \
 ### 2. Webhook (Receber Mensagem)
 ```bash
 curl -X POST http://localhost:3000/webhooks/uazapi/message \
+  -H "x-tenant-id: tenant-demo" \
   -H "Content-Type: application/json" \
   -d '{
     "phone": "5511999999999",
@@ -229,6 +241,13 @@ ENABLE_TEST_ENDPOINTS=false
 REQUIRE_WEBHOOK_SECRETS=true
 DB_CONNECT_MAX_ATTEMPTS=5
 DB_CONNECT_RETRY_MS=2000
+
+# Segurança avançada de integração
+INTEGRATION_API_KEYS=key-prod-1,key-prod-2
+INTEGRATION_ALLOWED_HOSTS=api.cal.com,graph.facebook.com,api.rd.services
+
+# Multi-tenant
+# obrigatório enviar header x-tenant-id em todas as rotas de negócio
 ```
 
 ---

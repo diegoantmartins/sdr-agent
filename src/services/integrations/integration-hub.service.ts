@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { URL } from 'url';
 import { config } from '../../config/env';
 import {
   IntegrationAction,
@@ -11,6 +12,25 @@ import { ExternalApiError, ValidationError } from '../../shared/utils/errors';
 import { logger } from '../../shared/utils/logger';
 
 export class IntegrationHubService {
+  private getAllowedHosts(): string[] {
+    return (config.INTEGRATION_ALLOWED_HOSTS || '')
+      .split(',')
+      .map(item => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private assertAllowedUrl(targetUrl: string): void {
+    const allowedHosts = this.getAllowedHosts();
+    if (allowedHosts.length === 0) {
+      throw new ValidationError('INTEGRATION_ALLOWED_HOSTS não configurado para generic_http');
+    }
+
+    const parsed = new URL(targetUrl);
+    if (!allowedHosts.includes(parsed.hostname.toLowerCase())) {
+      throw new ValidationError(`Host não permitido para generic_http: ${parsed.hostname}`);
+    }
+  }
+
   private assertAction(provider: IntegrationProvider, action: IntegrationAction): void {
     if (!PROVIDER_CAPABILITIES[provider]?.includes(action)) {
       throw new ValidationError(`Ação ${action} não suportada para provider ${provider}`);
@@ -138,6 +158,8 @@ export class IntegrationHubService {
     if (!payload?.url || !payload?.method) {
       throw new ValidationError('generic_http requer payload.url e payload.method');
     }
+
+    this.assertAllowedUrl(payload.url);
 
     const response = await axios.request({
       url: payload.url,

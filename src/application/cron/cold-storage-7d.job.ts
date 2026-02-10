@@ -44,7 +44,7 @@ export class ColdStorage7dJob {
 
       for (const lead of leadsToArchive) {
         try {
-          await this.leadService.archiveLead(lead.phone, 'no_response_7d');
+          await this.leadService.archiveLead(lead.tenantId, lead.phone, 'no_response_7d');
           processed++;
         } catch (err) {
           logger.error(`[ColdStorage7dJob] Erro ao arquivar ${lead.phone}:`, err);

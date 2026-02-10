@@ -25,6 +25,10 @@ const envSchema = z.object({
   // UAZAPI (WhatsApp)
   UAZAPI_KEY: z.string(),
   UAZAPI_URL: z.string().url(),
+  UAZAPI_WEBHOOK_SECRET: z.string().optional(),
+
+  // Webhooks
+  CHATWOOT_WEBHOOK_SECRET: z.string().optional(),
   
   // Slack
   SLACK_WEBHOOK_URL: z.string().url().optional(),

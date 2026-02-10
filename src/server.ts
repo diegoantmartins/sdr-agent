@@ -11,6 +11,7 @@ import { LeadService } from './domain/lead/lead.service';
 import { setupAgenda } from './application/cron/agenda-setup';
 import { getUAZAPIClient } from './infra/uazapi/uazapi.client';
 import { chatService } from './services/chatwootService';
+import { isWebhookAuthorized } from './application/webhooks/webhook-auth';
 
 // Instâncias globais
 let prisma: PrismaClient;
@@ -66,6 +67,11 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== WEBHOOK: UAZAPI (WhatsApp Incoming) ==========
   app.post('/webhooks/uazapi/message', async (request, reply) => {
     try {
+      if (!isWebhookAuthorized(request.headers, { expectedSecret: config.UAZAPI_WEBHOOK_SECRET })) {
+        logger.warn('[WEBHOOK:UAZAPI] Tentativa com segredo inválido');
+        return reply.code(401).send({ error: 'unauthorized webhook' });
+      }
+
       const { phone, name, message, messageId, timestamp } = request.body as any;
 
       logger.info(`[WEBHOOK:UAZAPI] Mensagem recebida de ${phone}`);
@@ -150,6 +156,11 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== WEBHOOK: Chatwoot (Message) ==========
   app.post('/webhooks/chatwoot/message-created', async (request, reply) => {
     try {
+      if (!isWebhookAuthorized(request.headers, { expectedSecret: config.CHATWOOT_WEBHOOK_SECRET })) {
+        logger.warn('[WEBHOOK:CHATWOOT] Tentativa com segredo inválido');
+        return reply.code(401).send({ error: 'unauthorized webhook' });
+      }
+
       const payload = request.body as any;
       const { message, conversation } = payload;
 

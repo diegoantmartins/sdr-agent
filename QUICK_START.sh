@@ -2,7 +2,7 @@
 # QUICK_START.sh - Iniciar projeto em 2 minutos
 
 echo "🚀 ============================================="
-echo "   VIZIMED AGENT V2 - Quick Start"
+echo "   SDR AGENT CORE - Quick Start"
 echo "============================================="
 echo ""
 
@@ -24,7 +24,7 @@ echo -e "${GREEN}✅ Node.js $NODE_VERSION${NC}"
 echo ""
 
 # Ir para diretório do projeto
-PROJECT_DIR="/root/home/agente de i.a/vizimed-agent"
+PROJECT_DIR="/root/home/agente de i.a/sdr-agent"
 cd "$PROJECT_DIR" || exit 1
 
 echo "📂 Diretório: $PROJECT_DIR"
@@ -108,8 +108,8 @@ case $OPTION in
     echo -e "${GREEN}✅ Containers iniciados!${NC}"
     echo ""
     echo "📝 Edite .env se necessário:"
-    echo "   DATABASE_URL=postgresql://vizimed:vizimed_password@localhost:5432/vizimed"
-    echo "   MONGODB_URL=mongodb://root:mongodb_password@localhost:27017/vizimed-agenda?authSource=admin"
+    echo "   DATABASE_URL=postgresql://agent:agent_password@localhost:5432/agent"
+    echo "   MONGODB_URL=mongodb://root:mongodb_password@localhost:27017/agent-agenda?authSource=admin"
     echo "   REDIS_URL=redis://localhost:6379"
     echo ""
     echo "🚀 Depois execute:"

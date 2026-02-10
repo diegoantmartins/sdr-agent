@@ -1,4 +1,4 @@
-# 🚀 VIZIMED Agent V2 - STATUS OPERACIONAL
+# 🚀 SDR Agent Core - STATUS OPERACIONAL
 
 **Data**: 27 de Janeiro de 2026  
 **Status**: ✅ **OPERANDO**

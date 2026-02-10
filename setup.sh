@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🚀 Iniciando setup do VIZIMED Agent V2..."
+echo "🚀 Iniciando setup do SDR Agent Core..."
 
 # ============ 1. Verificar Node.js ==========
 echo "📦 Verificando Node.js..."
@@ -39,7 +39,7 @@ docker-compose up -d
 # ============ 6. Aguardar banco de dados ==========
 echo "⏳ Aguardando PostgreSQL..."
 for i in {1..30}; do
-  if docker-compose exec -T postgres pg_isready -U vizimed > /dev/null 2>&1; then
+  if docker-compose exec -T postgres pg_isready -U agent > /dev/null 2>&1; then
     echo "✅ PostgreSQL pronto"
     break
   fi

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VIZIMED Agent V2 - Test Suite
+# SDR Agent Core - Test Suite
 # Uso: bash test-suite.sh
 
 API="http://localhost:3000"
@@ -9,7 +9,7 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}🧪 VIZIMED Agent V2 - Test Suite${NC}\n"
+echo -e "${YELLOW}🧪 SDR Agent Core - Test Suite${NC}\n"
 
 # Health Check
 echo -e "${YELLOW}1. Testing Health Check...${NC}"

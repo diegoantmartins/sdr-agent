@@ -1,4 +1,4 @@
-# Deployment Guide - VIZIMED Agent V2
+# Deployment Guide - SDR Agent Core
 
 ## 📋 Índice
 1. [Quick Start](#quick-start)
@@ -15,7 +15,7 @@
 ```bash
 # 1. Clonar repositório
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 
 # 2. Executar setup automático (cria estrutura, instala deps, rodas migrations)
 bash setup.sh
@@ -43,7 +43,7 @@ Server rodará em: **http://localhost:3000**
 
 ```bash
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 npm install
 ```
 
@@ -114,8 +114,8 @@ Edite `docker-compose.yml`:
 
 ```yaml
 environment:
-  DATABASE_URL: postgresql://user:password@postgres:5432/vizimed
-  MONGODB_URL: mongodb://root:password@mongodb:27017/vizimed
+  DATABASE_URL: postgresql://user:password@postgres:5432/agent
+  MONGODB_URL: mongodb://root:password@mongodb:27017/agent
   REDIS_URL: redis://redis:6379
 ```
 
@@ -127,8 +127,8 @@ environment:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:strongpass@prod-host:5432/vizimed
-MONGODB_URL=mongodb://root:strongpass@prod-host:27017/vizimed
+DATABASE_URL=postgresql://user:strongpass@prod-host:5432/agent
+MONGODB_URL=mongodb://root:strongpass@prod-host:27017/agent
 
 # Redis (com SSL)
 REDIS_URL=redis://:password@prod-redis:6379
@@ -160,7 +160,7 @@ Crie `pm2.config.js`:
 module.exports = {
   apps: [
     {
-      name: 'vizimed-agent',
+      name: 'sdr-agent',
       script: 'dist/src/server.js',
       instances: 'max',
       exec_mode: 'cluster',
@@ -189,17 +189,17 @@ pm2 startup
 ### Nginx Reverse Proxy
 
 ```nginx
-upstream vizimed {
+upstream agent {
   server localhost:3000;
   keepalive 64;
 }
 
 server {
   listen 80;
-  server_name api.vizimed.com;
+  server_name api.agent.com;
 
   location / {
-    proxy_pass http://vizimed;
+    proxy_pass http://agent;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection 'upgrade';
@@ -212,7 +212,7 @@ server {
   # Health check
   location /health {
     access_log off;
-    proxy_pass http://vizimed;
+    proxy_pass http://agent;
   }
 }
 ```
@@ -265,7 +265,7 @@ Acessar via `/api/leads` e `/api/leads/hot`
 
 ```bash
 # Verificar PostgreSQL
-psql -h localhost -U vizimed -d vizimed
+psql -h localhost -U agent -d agent
 
 # Verificar DATABASE_URL no .env
 echo $DATABASE_URL

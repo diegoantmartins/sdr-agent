@@ -1,9 +1,9 @@
 ╔════════════════════════════════════════════════════════════════════════════════╗
 ║                        ESTRUTURA COMPLETA DO PROJETO                          ║
-║                           VIZIMED AGENT V2                                    ║
+║                           SDR AGENT CORE                                    ║
 ╚════════════════════════════════════════════════════════════════════════════════╝
 
-vizimed-agent/
+sdr-agent/
 │
 ├── 📄 Arquivos Raiz
 │   ├── package.json                    ✅ Dependências npm
@@ -225,7 +225,7 @@ DevDependencies:
 COMO INICIAR:
 
 1. Entrar no diretório:
-   cd /root/home/agente\ de\ i.a/vizimed-agent
+   cd /root/home/agente\ de\ i.a/sdr-agent
 
 2. Ver START_HERE.txt:
    cat START_HERE.txt
@@ -249,8 +249,8 @@ COMO INICIAR:
 VARIÁVEIS DE AMBIENTE NECESSÁRIAS (.env):
 
 DATABASE:
-  DATABASE_URL=postgresql://user:pass@localhost:5432/vizimed
-  MONGODB_URL=mongodb://localhost:27017/vizimed-agenda
+  DATABASE_URL=postgresql://user:pass@localhost:5432/agent
+  MONGODB_URL=mongodb://localhost:27017/agent-agenda
   REDIS_URL=redis://localhost:6379
 
 OPENAI (IA):

@@ -1,6 +1,6 @@
 // README.md
 
-# 🤖 VIZIMED AGENT V2 - AI Lead Management System
+# 🤖 SDR AGENT CORE - AI Lead Management System
 
 > **Agente inteligente de gestão de leads integrado com WhatsApp, Chatwoot e OpenAI**
 
@@ -180,8 +180,8 @@ npm start
 
 ```env
 # Database
-DATABASE_URL=postgresql://vizimed:vizimed_password@localhost:5433/vizimed
-MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/vizimed-agenda
+DATABASE_URL=postgresql://agent:agent_password@localhost:5433/agent
+MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/agent-agenda
 
 # APIs (⚠️ ATUALIZAR CHAVES)
 OPENAI_API_KEY=sk-proj-...
@@ -193,6 +193,10 @@ UAZAPI_URL=https://api.uazapi.com
 CHATWOOT_URL=https://connect.synapsea.com.br
 CHATWOOT_API_TOKEN=81wgoQ4AWQxrJc7sHLmD23nb
 CHATWOOT_ACCOUNT_ID=1
+
+# Segurança de Webhooks (opcional, recomendado)
+UAZAPI_WEBHOOK_SECRET=seu-segredo-uazapi
+CHATWOOT_WEBHOOK_SECRET=seu-segredo-chatwoot
 
 # Server
 PORT=3000
@@ -213,7 +217,7 @@ npm run build
 
 ### Logs
 ```bash
-tail -f /tmp/vizimed.log
+tail -f /tmp/agent.log
 ```
 
 ### Testes
@@ -261,7 +265,7 @@ Propriedade da Synapsea.
 ```bash
 # Clone o repositório
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 
 # Executar setup automático
 bash setup.sh
@@ -305,8 +309,8 @@ src/
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/vizimed
-MONGODB_URL=mongodb://localhost:27017/vizimed
+DATABASE_URL=postgresql://user:pass@localhost:5432/agent
+MONGODB_URL=mongodb://localhost:27017/agent
 
 # OpenAI
 OPENAI_API_KEY=sk-...
@@ -409,7 +413,7 @@ logs/
 
 ## 📄 Licença
 
-Proprietary - VIZIMED
+Proprietary - SDR
 
 ## 📞 Suporte
 

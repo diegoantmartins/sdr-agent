@@ -25,10 +25,33 @@ const envSchema = z.object({
   // UAZAPI (WhatsApp)
   UAZAPI_KEY: z.string(),
   UAZAPI_URL: z.string().url(),
+  UAZAPI_WEBHOOK_SECRET: z.string().optional(),
+
+  // Webhooks
+  CHATWOOT_WEBHOOK_SECRET: z.string().optional(),
   
   // Slack
   SLACK_WEBHOOK_URL: z.string().url().optional(),
   SLACK_BOT_TOKEN: z.string().optional(),
+
+  // Integration Hub
+  CALCOM_API_URL: z.string().url().optional(),
+  CALCOM_API_KEY: z.string().optional(),
+  GOOGLE_CALENDAR_API_URL: z.string().url().optional(),
+  GOOGLE_CALENDAR_TOKEN: z.string().optional(),
+  GOOGLE_SHEETS_API_URL: z.string().url().optional(),
+  GOOGLE_SHEETS_TOKEN: z.string().optional(),
+  META_API_URL: z.string().url().optional(),
+  META_API_TOKEN: z.string().optional(),
+  RD_STATION_API_URL: z.string().url().optional(),
+  RD_STATION_TOKEN: z.string().optional(),
+
+  // Security / runtime hardening
+  CORS_ALLOWED_ORIGINS: z.string().optional(), // csv: https://a.com,https://b.com
+  ENABLE_TEST_ENDPOINTS: z.coerce.boolean().default(false),
+  REQUIRE_WEBHOOK_SECRETS: z.coerce.boolean().default(false),
+  DB_CONNECT_MAX_ATTEMPTS: z.coerce.number().default(5),
+  DB_CONNECT_RETRY_MS: z.coerce.number().default(2000),
   
   // Server
   PORT: z.coerce.number().default(3000),

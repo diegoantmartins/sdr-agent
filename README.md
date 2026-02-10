@@ -1,6 +1,6 @@
 // README.md
 
-# 🤖 VIZIMED AGENT V2 - AI Lead Management System
+# 🤖 SDR AGENT CORE - AI Lead Management System
 
 > **Agente inteligente de gestão de leads integrado com WhatsApp, Chatwoot e OpenAI**
 
@@ -110,6 +110,12 @@ GET    /api/leads/:phone       # Detalhe
 GET    /api/leads/hot          # Hot leads
 ```
 
+### Integration Hub (Conector universal)
+```bash
+GET    /api/integrations/providers                # Lista provedores e ações suportadas
+POST   /api/integrations/:provider/actions        # Executa ação de integração
+```
+
 ### Webhooks
 ```bash
 POST   /webhooks/uazapi/message        # WhatsApp
@@ -180,8 +186,8 @@ npm start
 
 ```env
 # Database
-DATABASE_URL=postgresql://vizimed:vizimed_password@localhost:5433/vizimed
-MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/vizimed-agenda
+DATABASE_URL=postgresql://agent:agent_password@localhost:5433/agent
+MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/agent-agenda
 
 # APIs (⚠️ ATUALIZAR CHAVES)
 OPENAI_API_KEY=sk-proj-...
@@ -194,12 +200,35 @@ CHATWOOT_URL=https://connect.synapsea.com.br
 CHATWOOT_API_TOKEN=81wgoQ4AWQxrJc7sHLmD23nb
 CHATWOOT_ACCOUNT_ID=1
 
+# Segurança de Webhooks (opcional, recomendado)
+UAZAPI_WEBHOOK_SECRET=seu-segredo-uazapi
+CHATWOOT_WEBHOOK_SECRET=seu-segredo-chatwoot
+
+# Integration Hub (opcional, para conectores externos)
+CALCOM_API_URL=https://api.cal.com/v1
+CALCOM_API_KEY=...
+GOOGLE_CALENDAR_API_URL=https://www.googleapis.com/calendar/v3
+GOOGLE_CALENDAR_TOKEN=...
+GOOGLE_SHEETS_API_URL=https://sheets.googleapis.com/v4/spreadsheets
+GOOGLE_SHEETS_TOKEN=...
+META_API_URL=https://graph.facebook.com/v20.0
+META_API_TOKEN=...
+RD_STATION_API_URL=https://api.rd.services
+RD_STATION_TOKEN=...
+
 # Server
 PORT=3000
 NODE_ENV=development
 LOG_LEVEL=debug
 FOLLOW_UP_DELAY_HOURS=24
 COLD_STORAGE_DAYS=7
+
+# Hardening (recomendado em produção)
+CORS_ALLOWED_ORIGINS=https://app.suaempresa.com,https://painel.suaempresa.com
+ENABLE_TEST_ENDPOINTS=false
+REQUIRE_WEBHOOK_SECRETS=true
+DB_CONNECT_MAX_ATTEMPTS=5
+DB_CONNECT_RETRY_MS=2000
 ```
 
 ---
@@ -213,7 +242,7 @@ npm run build
 
 ### Logs
 ```bash
-tail -f /tmp/vizimed.log
+tail -f /tmp/agent.log
 ```
 
 ### Testes
@@ -261,7 +290,7 @@ Propriedade da Synapsea.
 ```bash
 # Clone o repositório
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 
 # Executar setup automático
 bash setup.sh
@@ -305,8 +334,8 @@ src/
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/vizimed
-MONGODB_URL=mongodb://localhost:27017/vizimed
+DATABASE_URL=postgresql://user:pass@localhost:5432/agent
+MONGODB_URL=mongodb://localhost:27017/agent
 
 # OpenAI
 OPENAI_API_KEY=sk-...
@@ -409,7 +438,7 @@ logs/
 
 ## 📄 Licença
 
-Proprietary - VIZIMED
+Proprietary - SDR
 
 ## 📞 Suporte
 

@@ -1,7 +1,7 @@
 {
-  "name": "vizimed-agent",
+  "name": "sdr-agent",
   "version": "2.0.0",
-  "description": "IA Agent para Vizimed - Gestão inteligente de Leads",
+  "description": "IA Agent Core - Gestão inteligente de Leads",
   "main": "dist/src/server.js",
   "type": "commonjs",
   "scripts": {

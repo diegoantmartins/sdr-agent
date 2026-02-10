@@ -1,4 +1,4 @@
-# 🚀 DEPLOYMENT CHECKLIST - VIZIMED Agent V2
+# 🚀 DEPLOYMENT CHECKLIST - SDR Agent Core
 
 **Data**: 27 de Janeiro de 2026  
 **Status**: Pronto para produção
@@ -76,7 +76,7 @@
 ### Option 1: Servidor Linux (Recomendado)
 ```bash
 # 1. Clone o repositório
-cd /root/home/agente\ de\ i.a/vizimed-agent
+cd /root/home/agente\ de\ i.a/sdr-agent
 
 # 2. Instale dependências
 npm install --legacy-peer-deps
@@ -107,8 +107,8 @@ CMD ["npm", "start"]
 
 Build e deploy:
 ```bash
-docker build -t vizimed-agent:v2 .
-docker run -p 3000:3000 --env-file .env vizimed-agent:v2
+docker build -t sdr-agent:v2 .
+docker run -p 3000:3000 --env-file .env sdr-agent:v2
 ```
 
 ### Option 3: Docker Compose (Full Stack)
@@ -206,13 +206,13 @@ ab -n 1000 -c 10 http://localhost:3000/health
 ### Logs
 ```bash
 # Ver logs em tempo real
-tail -f /tmp/vizimed.log
+tail -f /tmp/agent.log
 
 # Buscar erros
-grep ERROR /tmp/vizimed.log
+grep ERROR /tmp/agent.log
 
 # Last 100 lines
-tail -100 /tmp/vizimed.log
+tail -100 /tmp/agent.log
 ```
 
 ### Docker Logs
@@ -233,7 +233,7 @@ watch 'curl -s http://localhost:3000/health | jq'
 ### Database Queries
 ```bash
 # Conectar ao PostgreSQL
-psql postgresql://vizimed:vizimed_password@localhost:5433/vizimed
+psql postgresql://agent:agent_password@localhost:5433/agent
 
 # Ver leads
 SELECT * FROM active_lead LIMIT 10;
@@ -264,7 +264,7 @@ npm start
 ### Database connection error
 ```bash
 # Verificar conexão
-psql postgresql://vizimed:vizimed_password@localhost:5433/vizimed -c "SELECT 1"
+psql postgresql://agent:agent_password@localhost:5433/agent -c "SELECT 1"
 
 # Restart container
 docker-compose restart postgres

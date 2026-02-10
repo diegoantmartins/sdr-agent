@@ -1,11 +1,8 @@
 // src/domain/lead/lead.service.ts
 
-import { PrismaClient } from '@prisma/client';
+import { ActiveLead, IntentType, LeadStatus, PrismaClient } from '@prisma/client';
 import { logger } from '../../shared/utils/logger';
 import { NotFoundError } from '../../shared/utils/errors';
-
-type ActiveLead = any;
-type LeadStatus = 'TRIAGE' | 'HOT' | 'FOLLOW_UP' | 'COLD' | 'ARCHIVED' | 'OPEN';
 
 export interface CreateLeadDTO {
   phone: string;
@@ -24,7 +21,7 @@ export interface UpdateLeadDTO {
   score?: number;
   status?: LeadStatus;
   conversionStage?: string;
-  intentClassified?: string;
+  intentClassified?: IntentType;
   metadata?: Record<string, any>;
 }
 
@@ -82,8 +79,23 @@ export class LeadService {
         company: data.company || lead.company,
         score: data.score !== undefined ? data.score : lead.score,
         status: data.status || lead.status,
+        intentClassified: data.intentClassified || lead.intentClassified,
         conversionStage: data.conversionStage || lead.conversionStage,
         metadata: data.metadata ? { ...lead.metadata as any, ...data.metadata } : lead.metadata
+      }
+    });
+  }
+
+  async registerIncomingMessage(phone: string): Promise<void> {
+    const lead = await this.getLeadOrThrow(phone);
+
+    await this.prisma.activeLead.update({
+      where: { id: lead.id },
+      data: {
+        messageCount: {
+          increment: 1
+        },
+        lastMessageAt: new Date()
       }
     });
   }
@@ -103,7 +115,7 @@ export class LeadService {
   async getHotLeads(): Promise<ActiveLead[]> {
     return this.prisma.activeLead.findMany({
       where: {
-        status: { in: ['HOT', 'BUY_NOW'] as LeadStatus[] },
+        status: { in: ['HOT'] as LeadStatus[] },
         score: { gte: 80 }
       },
       orderBy: { score: 'desc' }

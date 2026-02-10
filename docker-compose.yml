@@ -4,27 +4,27 @@ services:
   # ========== PostgreSQL ==========
   postgres:
     image: postgres:16-alpine
-    container_name: vizimed-postgres
+    container_name: agent-postgres
     environment:
-      POSTGRES_USER: vizimed
-      POSTGRES_PASSWORD: vizimed_password
-      POSTGRES_DB: vizimed
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent_password
+      POSTGRES_DB: agent
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vizimed"]
+      test: ["CMD-SHELL", "pg_isready -U agent"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - vizimed-network
+      - agent-network
 
   # ========== MongoDB (para Agenda) ==========
   mongodb:
     image: mongo:6.0
-    container_name: vizimed-mongodb
+    container_name: agent-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: mongodb_password
@@ -38,12 +38,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - vizimed-network
+      - agent-network
 
   # ========== Redis (para Cache/Queue) ==========
   redis:
     image: redis:7-alpine
-    container_name: vizimed-redis
+    container_name: agent-redis
     ports:
       - "6379:6379"
     volumes:
@@ -54,18 +54,18 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - vizimed-network
+      - agent-network
 
   # ========== Agent App (apenas config, não start automático) ==========
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vizimed-agent
+    container_name: sdr-agent
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://vizimed:vizimed_password@postgres:5432/vizimed
-      MONGODB_URL: mongodb://root:mongodb_password@mongodb:27017/vizimed-agenda?authSource=admin
+      DATABASE_URL: postgresql://agent:agent_password@postgres:5432/agent
+      MONGODB_URL: mongodb://root:mongodb_password@mongodb:27017/agent-agenda?authSource=admin
       REDIS_URL: redis://redis:6379
       PORT: 3000
     ports:
@@ -78,7 +78,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - vizimed-network
+      - agent-network
     profiles:
       - manual
 
@@ -88,5 +88,5 @@ volumes:
   redis_data:
 
 networks:
-  vizimed-network:
+  agent-network:
     driver: bridge

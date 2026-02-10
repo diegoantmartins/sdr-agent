@@ -13,7 +13,7 @@ const logger = winston.createLogger({
     winston.format.splat(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'vizimed-agent' },
+  defaultMeta: { service: 'sdr-agent' },
   transports: [
     // Arquivo de erros
     new winston.transports.File({

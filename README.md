@@ -256,6 +256,10 @@ INTEGRATION_ALLOWED_HOSTS=api.cal.com,graph.facebook.com,api.rd.services
 
 ## 🛠️ Desenvolvimento
 
+### Contribuição
+- Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para padrões de colaboração.
+- Títulos e descrições de PR devem ser escritos em **Português (Brasil)**.
+
 ### Build
 ```bash
 npm run build

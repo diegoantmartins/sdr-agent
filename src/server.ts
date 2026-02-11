@@ -12,6 +12,7 @@ import { setupAgenda } from './application/cron/agenda-setup';
 import { getUAZAPIClient } from './infra/uazapi/uazapi.client';
 import { chatService } from './services/chatwootService';
 import { isWebhookAuthorized } from './application/webhooks/webhook-auth';
+codex/refactor-agent-for-improved-functionality-ujhmxn
 import { integrationHubService } from './services/integrations/integration-hub.service';
 import {
   IntegrationAction,
@@ -23,6 +24,7 @@ import { assertRole, parseApiKeys } from './shared/utils/auth';
 import { enforceTenantRateLimit } from './shared/utils/rate-limit';
 import { ConversationMetricsService } from './services/metrics/conversation-metrics.service';
 import { commercialEngineService } from './services/commercial/commercial-engine.service';
+ main
 
 // Instâncias globais
 let prisma: PrismaClient;
@@ -193,16 +195,20 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== WEBHOOK: UAZAPI (WhatsApp Incoming) ==========
   app.post('/webhooks/uazapi/message', async (request, reply) => {
     try {
+codex/refactor-agent-for-improved-functionality-ujhmxn
       if (config.REQUIRE_WEBHOOK_SECRETS && !config.UAZAPI_WEBHOOK_SECRET) {
         throw new ValidationError('UAZAPI_WEBHOOK_SECRET é obrigatório quando REQUIRE_WEBHOOK_SECRETS=true');
       }
 
+ main
       if (!isWebhookAuthorized(request.headers, { expectedSecret: config.UAZAPI_WEBHOOK_SECRET })) {
         logger.warn('[WEBHOOK:UAZAPI] Tentativa com segredo inválido');
         return reply.code(401).send({ error: 'unauthorized webhook' });
       }
 
+ codex/refactor-agent-for-improved-functionality-ujhmxn
       const tenantId = getTenantIdFromHeaders(request.headers as any);
+ main
       const { phone, name, message, messageId, timestamp } = request.body as any;
 
       if (!phone || !message) {
@@ -305,16 +311,20 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== WEBHOOK: Chatwoot (Message) ==========
   app.post('/webhooks/chatwoot/message-created', async (request, reply) => {
     try {
+ codex/refactor-agent-for-improved-functionality-ujhmxn
       if (config.REQUIRE_WEBHOOK_SECRETS && !config.CHATWOOT_WEBHOOK_SECRET) {
         throw new ValidationError('CHATWOOT_WEBHOOK_SECRET é obrigatório quando REQUIRE_WEBHOOK_SECRETS=true');
       }
 
+ main
       if (!isWebhookAuthorized(request.headers, { expectedSecret: config.CHATWOOT_WEBHOOK_SECRET })) {
         logger.warn('[WEBHOOK:CHATWOOT] Tentativa com segredo inválido');
         return reply.code(401).send({ error: 'unauthorized webhook' });
       }
 
+ codex/refactor-agent-for-improved-functionality-ujhmxn
       const tenantId = getTenantIdFromHeaders(request.headers as any);
+ main
       const payload = request.body as any;
       const { message, conversation, contact } = payload;
 

@@ -218,6 +218,7 @@ CHATWOOT_ACCOUNT_ID=1
 UAZAPI_WEBHOOK_SECRET=seu-segredo-uazapi
 CHATWOOT_WEBHOOK_SECRET=seu-segredo-chatwoot
 
+codex/refactor-agent-for-improved-functionality-ujhmxn
 # Integration Hub (opcional, para conectores externos)
 CALCOM_API_URL=https://api.cal.com/v1
 CALCOM_API_KEY=...
@@ -230,6 +231,7 @@ META_API_TOKEN=...
 RD_STATION_API_URL=https://api.rd.services
 RD_STATION_TOKEN=...
 
+main
 # Server
 PORT=3000
 NODE_ENV=development

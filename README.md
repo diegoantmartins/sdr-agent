@@ -141,6 +141,8 @@ GET    /test/uazapi           # Testar WhatsApp
 GET    /test/chatwoot         # Testar Chatwoot
 ```
 
+> Endpoints `/test/*` devem ficar desabilitados em produção (`ENABLE_TEST_ENDPOINTS=false`).
+
 ---
 
 ## 📝 Exemplo: Fluxo Completo

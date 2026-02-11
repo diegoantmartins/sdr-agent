@@ -47,6 +47,10 @@ const envSchema = z.object({
   RD_STATION_TOKEN: z.string().optional(),
   INTEGRATION_ALLOWED_HOSTS: z.string().optional(), // csv allowlist for generic_http
   INTEGRATION_API_KEYS: z.string().optional(), // csv list of keys authorized for integration execution
+  ADMIN_API_KEYS: z.string().optional(),
+  SDR_API_KEYS: z.string().optional(),
+  CLIENT_API_KEYS: z.string().optional(),
+  INTEGRATION_RATE_LIMIT_PER_MINUTE: z.coerce.number().default(60),
 
   // Security / runtime hardening
   CORS_ALLOWED_ORIGINS: z.string().optional(), // csv: https://a.com,https://b.com

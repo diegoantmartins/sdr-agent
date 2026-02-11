@@ -19,6 +19,9 @@ import {
   PROVIDER_CAPABILITIES
 } from './domain/integrations/integration.types';
 import { AppError, ValidationError } from './shared/utils/errors';
+import { assertRole, parseApiKeys } from './shared/utils/auth';
+import { enforceTenantRateLimit } from './shared/utils/rate-limit';
+import { ConversationMetricsService } from './services/metrics/conversation-metrics.service';
 import { commercialEngineService } from './services/commercial/commercial-engine.service';
 
 // Instâncias globais
@@ -27,6 +30,7 @@ let app: FastifyInstance;
 let intentClassifier: IntentClassifier;
 let leadService: LeadService;
 let uazapiClient: any;
+let conversationMetricsService: ConversationMetricsService;
 
 function parseAllowedOrigins(originsCsv?: string): string[] {
   if (!originsCsv) return [];
@@ -52,6 +56,14 @@ function getIntegrationApiKeys(): string[] {
     .filter(Boolean);
 }
 
+
+function getAuthConfig() {
+  return {
+    adminKeys: parseApiKeys(config.ADMIN_API_KEYS),
+    sdrKeys: parseApiKeys(config.SDR_API_KEYS),
+    clientKeys: parseApiKeys(config.CLIENT_API_KEYS)
+  };
+}
 function assertIntegrationKey(headers: Record<string, any>): void {
   const allowedKeys = getIntegrationApiKeys();
   if (allowedKeys.length === 0) {
@@ -120,6 +132,7 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== Services Setup ==========
   intentClassifier = new IntentClassifier(config.OPENAI_API_KEY, config.OPENAI_MODEL);
   leadService = new LeadService(prisma);
+  conversationMetricsService = new ConversationMetricsService(prisma);
   uazapiClient = getUAZAPIClient();
 
   // ========== Fastify Setup ==========
@@ -241,6 +254,7 @@ async function initializeApp(): Promise<FastifyInstance> {
 
       // 2.1 Atualizar contadores e atividade do lead
       await leadService.registerIncomingMessage(tenantId, phone);
+      await conversationMetricsService.registerMessage(lead.id, 'incoming');
 
       // 3. Sincronizar com Chatwoot (async, não bloqueia resposta)
       chatService.syncMessage({
@@ -335,9 +349,11 @@ async function initializeApp(): Promise<FastifyInstance> {
           }
         });
 
-        if (message?.message_type !== 1) {
+        const isOutgoing = message?.message_type === 1;
+        if (!isOutgoing) {
           await leadService.registerIncomingMessage(tenantId, phone);
         }
+        await conversationMetricsService.registerMessage(lead.id, isOutgoing ? 'outgoing' : 'incoming');
       }
 
       await auditEvent(tenantId, 'webhook_chatwoot_processed', true, {
@@ -355,6 +371,7 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Get Leads ==========
   app.get('/api/leads', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'client', getAuthConfig());
       const tenantId = getTenantIdFromHeaders(request.headers as any);
       const leads = await prisma.activeLead.findMany({
         where: { tenantId },
@@ -372,6 +389,7 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Create Lead ==========
   app.post('/api/leads', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'sdr', getAuthConfig());
       const tenantId = getTenantIdFromHeaders(request.headers as any);
       const body = request.body as Record<string, any>;
       const { phone, name, email, company, source, campaignId, metadata } = body;
@@ -404,6 +422,7 @@ async function initializeApp(): Promise<FastifyInstance> {
     '/api/leads/:phone',
     async (request, reply) => {
       try {
+        assertRole(request.headers as any, 'client', getAuthConfig());
         const tenantId = getTenantIdFromHeaders(request.headers as any);
         const { phone } = request.params;
         const lead = await leadService.getLead(tenantId, phone);
@@ -428,6 +447,7 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Hot Leads ==========
   app.get('/api/leads/hot', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'client', getAuthConfig());
       const tenantId = getTenantIdFromHeaders(request.headers as any);
       const hotLeads = await leadService.getHotLeads(tenantId);
       return reply.send({ leads: hotLeads });
@@ -610,8 +630,10 @@ async function initializeApp(): Promise<FastifyInstance> {
     Body: { action: IntegrationAction; payload: Record<string, any> };
   }>('/api/integrations/:provider/actions', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'sdr', getAuthConfig());
       assertIntegrationKey(request.headers as any);
       const tenantId = getTenantIdFromHeaders(request.headers as any);
+      enforceTenantRateLimit(tenantId, 'integration_execute', config.INTEGRATION_RATE_LIMIT_PER_MINUTE, 60_000);
       const { provider } = request.params;
       const { action, payload } = request.body || ({} as any);
 
@@ -646,12 +668,14 @@ async function initializeApp(): Promise<FastifyInstance> {
   });
 
   // ========== API: Commercial Engine ==========
-  app.get('/api/commercial/templates', async (_request, reply) => {
+  app.get('/api/commercial/templates', async (request, reply) => {
+    assertRole(request.headers as any, 'client', getAuthConfig());
     return reply.send({ templates: commercialEngineService.getTemplates() });
   });
 
   app.get<{ Params: { niche: string } }>('/api/commercial/templates/:niche', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'client', getAuthConfig());
       const template = commercialEngineService.getTemplateByNiche(request.params.niche);
       return reply.send({ template });
     } catch (error) {
@@ -664,6 +688,7 @@ async function initializeApp(): Promise<FastifyInstance> {
     Body: { niche: string; leadStage?: string; intent?: 'BUY_NOW' | 'SUPPORT' | 'TRIAGE'; score?: number }
   }>('/api/commercial/next-action', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'sdr', getAuthConfig());
       const tenantId = getTenantIdFromHeaders(request.headers as any);
       const { niche, leadStage, intent, score } = request.body || ({} as any);
       if (!niche) {

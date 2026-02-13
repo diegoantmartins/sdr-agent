@@ -116,6 +116,22 @@ GET    /api/leads/:phone       # Detalhe
 GET    /api/leads/hot          # Hot leads
 ```
 
+### Integration Hub (Conector universal)
+```bash
+GET    /api/integrations/providers                # Lista provedores e ações suportadas
+POST   /api/integrations/:provider/actions        # Executa ação de integração
+```
+
+> Para endpoints multi-tenant use sempre o header `x-tenant-id`.
+> Para executar ações de integração use também `x-integration-key`.
+
+### Commercial Engine (motor universal)
+```bash
+GET    /api/commercial/templates                  # Templates por nicho
+GET    /api/commercial/templates/:niche           # Template específico (saude, juridico, saas...)
+POST   /api/commercial/next-action                # Next best action comercial
+```
+
 ### Webhooks
 ```bash
 POST   /webhooks/uazapi/message        # WhatsApp
@@ -131,6 +147,8 @@ GET    /test/uazapi           # Testar WhatsApp
 GET    /test/chatwoot         # Testar Chatwoot
 ```
 
+> Endpoints `/test/*` devem ficar desabilitados em produção (`ENABLE_TEST_ENDPOINTS=false`).
+
 ---
 
 ## 📝 Exemplo: Fluxo Completo
@@ -138,6 +156,7 @@ GET    /test/chatwoot         # Testar Chatwoot
 ### 1. Criar Lead
 ```bash
 curl -X POST http://localhost:3000/api/leads \
+  -H "x-tenant-id: tenant-demo" \
   -H "Content-Type: application/json" \
   -d '{
     "phone": "5511999999999",
@@ -150,6 +169,7 @@ curl -X POST http://localhost:3000/api/leads \
 ### 2. Webhook (Receber Mensagem)
 ```bash
 curl -X POST http://localhost:3000/webhooks/uazapi/message \
+  -H "x-tenant-id: tenant-demo" \
   -H "Content-Type: application/json" \
   -d '{
     "phone": "5511999999999",
@@ -204,12 +224,40 @@ CHATWOOT_ACCOUNT_ID=1
 UAZAPI_WEBHOOK_SECRET=seu-segredo-uazapi
 CHATWOOT_WEBHOOK_SECRET=seu-segredo-chatwoot
 
+codex/refactor-agent-for-improved-functionality-ujhmxn
+# Integration Hub (opcional, para conectores externos)
+CALCOM_API_URL=https://api.cal.com/v1
+CALCOM_API_KEY=...
+GOOGLE_CALENDAR_API_URL=https://www.googleapis.com/calendar/v3
+GOOGLE_CALENDAR_TOKEN=...
+GOOGLE_SHEETS_API_URL=https://sheets.googleapis.com/v4/spreadsheets
+GOOGLE_SHEETS_TOKEN=...
+META_API_URL=https://graph.facebook.com/v20.0
+META_API_TOKEN=...
+RD_STATION_API_URL=https://api.rd.services
+RD_STATION_TOKEN=...
+
+main
 # Server
 PORT=3000
 NODE_ENV=development
 LOG_LEVEL=debug
 FOLLOW_UP_DELAY_HOURS=24
 COLD_STORAGE_DAYS=7
+
+# Hardening (recomendado em produção)
+CORS_ALLOWED_ORIGINS=https://app.suaempresa.com,https://painel.suaempresa.com
+ENABLE_TEST_ENDPOINTS=false
+REQUIRE_WEBHOOK_SECRETS=true
+DB_CONNECT_MAX_ATTEMPTS=5
+DB_CONNECT_RETRY_MS=2000
+
+# Segurança avançada de integração
+INTEGRATION_API_KEYS=key-prod-1,key-prod-2
+INTEGRATION_ALLOWED_HOSTS=api.cal.com,graph.facebook.com,api.rd.services
+
+# Multi-tenant
+# obrigatório enviar header x-tenant-id em todas as rotas de negócio
 ```
 
 ---
@@ -265,6 +313,10 @@ Depois copie o token gerado para `ADMIN_CONFIG_TOKEN` e use no header `x-admin-t
 ---
 
 ## 🛠️ Desenvolvimento
+
+### Contribuição
+- Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para padrões de colaboração.
+- Títulos e descrições de PR devem ser escritos em **Português (Brasil)**.
 
 ### Build
 ```bash

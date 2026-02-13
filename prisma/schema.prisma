@@ -13,9 +13,10 @@ generator client {
 
 model ActiveLead {
   id                String    @id @default(cuid())
+  tenantId          String
   
   // Identificação
-  phone             String    @unique
+  phone             String
   name              String
   email             String?
   company           String?
@@ -53,6 +54,8 @@ model ActiveLead {
   updatedAt         DateTime  @updatedAt
   
   @@index([phone])
+  @@index([tenantId])
+  @@unique([tenantId, phone], name: "tenant_phone_unique")
   @@index([status])
   @@index([score])
   @@index([lastMessageAt])
@@ -63,6 +66,7 @@ model ActiveLead {
 
 model ColdLead {
   id                String    @id @default(cuid())
+  tenantId          String
   
   // Referência ao original
   originalLeadId    String?
@@ -95,6 +99,7 @@ model ColdLead {
   updatedAt         DateTime  @updatedAt
   
   @@index([phone])
+  @@index([tenantId])
   @@index([archivedAt])
   @@index([freezeReason])
   @@index([createdAt])
@@ -104,6 +109,7 @@ model ColdLead {
 
 model Message {
   id                String    @id @default(cuid())
+  tenantId          String
   
   leadId            String
   lead              ActiveLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -125,6 +131,7 @@ model Message {
   createdAt         DateTime  @default(now())
   
   @@index([leadId])
+  @@index([tenantId])
   @@index([createdAt])
   @@index([syncStatus])
   @@index([leadId, createdAt])
@@ -199,6 +206,21 @@ model JobLog {
   @@index([jobType])
   @@index([startedAt])
   @@index([status])
+}
+
+model GovernanceAudit {
+  id                String    @id @default(cuid())
+  tenantId          String
+  actor             String?
+  action            String
+  resource          String?
+  success           Boolean   @default(true)
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([action])
+  @@index([createdAt])
 }
 
 // =============== ANALYTICS & METRICS ===============

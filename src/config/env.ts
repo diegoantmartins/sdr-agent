@@ -43,6 +43,18 @@ const envSchema = z.object({
   FOLLOW_UP_DELAY_HOURS: z.coerce.number().default(24),
   COLD_STORAGE_DAYS: z.coerce.number().default(7),
   MIN_INTENT_SCORE: z.coerce.number().default(0.7),
+
+  // Agent Persona / Resposta
+  AGENT_AUTO_REPLY_ENABLED: z.coerce.boolean().default(true),
+  AGENT_COMPANY_NAME: z.string().default('Sua Empresa'),
+  AGENT_OBJECTIVE: z.string().default('Qualificar leads e avançar para reunião ou proposta.'),
+  AGENT_TONE: z.string().default('consultivo e cordial'),
+  AGENT_LANGUAGE: z.string().default('português do Brasil'),
+  AGENT_MAX_REPLY_CHARS: z.coerce.number().default(420),
+  AGENT_CONFIG_PATH: z.string().default('./data/agent-config.json'),
+
+  // Admin painel (opcional)
+  ADMIN_CONFIG_TOKEN: z.string().optional(),
 });
 
 type Config = z.infer<typeof envSchema>;

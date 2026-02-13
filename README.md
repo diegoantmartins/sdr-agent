@@ -48,6 +48,12 @@ npm install --legacy-peer-deps
 ```
 
 ### 2. **Configurar Ambiente**
+Você pode usar o template de homologação para VPS:
+```bash
+cp .env.vps.test.example .env
+```
+Depois edite os valores reais (OpenAI, UAZAPI, Chatwoot, banco).
+
 Edite `.env` e adicione as chaves:
 ```bash
 # Obrigatório para operação completa:

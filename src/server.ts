@@ -318,7 +318,11 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
 
       // 2. Salvar mensagem (tratar duplicatas de chatwootMessageId)
       let messageRecord;
+ codex/improve-project-features
+      let isNewMessage = false;
+
       let isDuplicate = false;
+ main
       try {
         messageRecord = await prisma.message.create({
           data: {
@@ -329,6 +333,7 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
             chatwootMessageId: messageId
           }
         });
+        isNewMessage = true;
       } catch (err: any) {
         // P2002 = Unique constraint failed
         if (err.code === 'P2002' && err.meta?.target?.includes('chatwootMessageId')) {
@@ -340,6 +345,12 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
         }
       }
 
+ codex/improve-project-features
+      if (isNewMessage) {
+        await leadService.incrementMessageCount(phone);
+      }
+
+
       if (isDuplicate) {
         await auditEvent(tenantId, 'webhook_uazapi_duplicate', true, { phone, messageId });
         return reply.code(200).send({ success: true, messageId, duplicate: true });
@@ -349,6 +360,7 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
       await leadService.registerIncomingMessage(tenantId, phone);
       await conversationMetricsService.registerMessage(lead.id, 'incoming');
 
+ main
       // 3. Sincronizar com Chatwoot (async, não bloqueia resposta)
       chatService.syncMessage({
         phone,

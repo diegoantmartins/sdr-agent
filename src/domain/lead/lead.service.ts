@@ -93,6 +93,28 @@ export class LeadService {
         status: data.status || lead.status,
         intentClassified: data.intentClassified || lead.intentClassified,
         conversionStage: data.conversionStage || lead.conversionStage,
+ codex/improve-project-features
+        intentClassified: data.intentClassified !== undefined ? data.intentClassified : lead.intentClassified,
+        metadata: data.metadata ? { ...lead.metadata as any, ...data.metadata } : lead.metadata
+      }
+    });
+  }
+
+  async incrementMessageCount(phone: string): Promise<ActiveLead> {
+    const lead = await this.getLeadOrThrow(phone);
+
+    return this.prisma.activeLead.update({
+      where: { id: lead.id },
+      data: {
+        messageCount: { increment: 1 },
+        lastMessageAt: new Date()
+      }
+    });
+  }
+
+  async incrementScore(phone: string, points: number): Promise<void> {
+    const lead = await this.getLeadOrThrow(phone);
+
         metadata: data.metadata ? { ...(lead.metadata as any), ...data.metadata } : lead.metadata
       }
     });
@@ -114,6 +136,7 @@ export class LeadService {
 
   async incrementScore(tenantId: string, phone: string, points: number): Promise<void> {
     const lead = await this.getLeadOrThrow(tenantId, phone);
+ main
     const newScore = Math.min(100, Math.max(0, lead.score + points));
 
     await this.prisma.activeLead.update({

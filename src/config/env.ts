@@ -14,8 +14,13 @@ const envSchema = z.object({
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   
   // OpenAI
+codex/improve-project-features
+  OPENAI_API_KEY: z.string().optional().default(''),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+
   OPENAI_API_KEY: z.string(),
   OPENAI_MODEL: z.string().default('gpt-5-nano'),
+ main
   
   // Chatwoot
   CHATWOOT_URL: z.string().url(),

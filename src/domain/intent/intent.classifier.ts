@@ -46,7 +46,7 @@ const INTENT_KEYWORDS = {
 export class IntentClassifier {
   private openai: OpenAI;
 
-  constructor(apiKey: string, private model: string = 'gpt-4o-mini') {
+  constructor(apiKey: string, private model: string = 'gpt-5-nano') {
     this.openai = new OpenAI({ apiKey });
   }
 

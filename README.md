@@ -191,7 +191,7 @@ MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/agent-agenda
 
 # APIs (⚠️ ATUALIZAR CHAVES)
 OPENAI_API_KEY=sk-proj-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 UAZAPI_KEY=...
 UAZAPI_URL=https://api.uazapi.com
 
@@ -370,7 +370,7 @@ MONGODB_URL=mongodb://localhost:27017/agent
 
 # OpenAI
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 
 # Chatwoot
 CHATWOOT_URL=https://chatwoot.example.com

@@ -365,7 +365,7 @@ echo $MONGODB_URL
 
 - Verificar se `OPENAI_API_KEY` está correto
 - Verificar se a chave tem limite de chamadas
-- Verificar modelo: `OPENAI_MODEL=gpt-4o-mini`
+- Verificar modelo: `OPENAI_MODEL=gpt-5-nano`
 
 ### Erro: "Port 3000 already in use"
 

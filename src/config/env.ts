@@ -15,7 +15,7 @@ const envSchema = z.object({
   
   // OpenAI
   OPENAI_API_KEY: z.string(),
-  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  OPENAI_MODEL: z.string().default('gpt-5-nano'),
   
   // Chatwoot
   CHATWOOT_URL: z.string().url(),

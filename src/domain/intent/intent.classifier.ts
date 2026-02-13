@@ -46,10 +46,15 @@ const INTENT_KEYWORDS = {
 export class IntentClassifier {
   private openai?: OpenAI;
 
+ codex/improve-project-features
   constructor(apiKey: string, private model: string = 'gpt-4o-mini') {
     if (apiKey) {
       this.openai = new OpenAI({ apiKey });
     }
+
+  constructor(apiKey: string, private model: string = 'gpt-5-nano') {
+    this.openai = new OpenAI({ apiKey });
+ main
   }
 
   async classify(message: string): Promise<ClassificationResult> {

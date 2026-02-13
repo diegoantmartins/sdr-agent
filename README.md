@@ -1,6 +1,6 @@
 // README.md
 
-# 🤖 VIZIMED AGENT V2 - AI Lead Management System
+# 🤖 SDR AGENT CORE - AI Lead Management System
 
 > **Agente inteligente de gestão de leads integrado com WhatsApp, Chatwoot e OpenAI**
 
@@ -48,6 +48,12 @@ npm install --legacy-peer-deps
 ```
 
 ### 2. **Configurar Ambiente**
+Você pode usar o template de homologação para VPS:
+```bash
+cp .env.vps.test.example .env
+```
+Depois edite os valores reais (OpenAI, UAZAPI, Chatwoot, banco).
+
 Edite `.env` e adicione as chaves:
 ```bash
 # Obrigatório para operação completa:
@@ -110,6 +116,22 @@ GET    /api/leads/:phone       # Detalhe
 GET    /api/leads/hot          # Hot leads
 ```
 
+### Integration Hub (Conector universal)
+```bash
+GET    /api/integrations/providers                # Lista provedores e ações suportadas
+POST   /api/integrations/:provider/actions        # Executa ação de integração
+```
+
+> Para endpoints multi-tenant use sempre o header `x-tenant-id`.
+> Para executar ações de integração use também `x-integration-key`.
+
+### Commercial Engine (motor universal)
+```bash
+GET    /api/commercial/templates                  # Templates por nicho
+GET    /api/commercial/templates/:niche           # Template específico (saude, juridico, saas...)
+POST   /api/commercial/next-action                # Next best action comercial
+```
+
 ### Webhooks
 ```bash
 POST   /webhooks/uazapi/message        # WhatsApp
@@ -125,6 +147,8 @@ GET    /test/uazapi           # Testar WhatsApp
 GET    /test/chatwoot         # Testar Chatwoot
 ```
 
+> Endpoints `/test/*` devem ficar desabilitados em produção (`ENABLE_TEST_ENDPOINTS=false`).
+
 ---
 
 ## 📝 Exemplo: Fluxo Completo
@@ -132,6 +156,7 @@ GET    /test/chatwoot         # Testar Chatwoot
 ### 1. Criar Lead
 ```bash
 curl -X POST http://localhost:3000/api/leads \
+  -H "x-tenant-id: tenant-demo" \
   -H "Content-Type: application/json" \
   -d '{
     "phone": "5511999999999",
@@ -144,6 +169,7 @@ curl -X POST http://localhost:3000/api/leads \
 ### 2. Webhook (Receber Mensagem)
 ```bash
 curl -X POST http://localhost:3000/webhooks/uazapi/message \
+  -H "x-tenant-id: tenant-demo" \
   -H "Content-Type: application/json" \
   -d '{
     "phone": "5511999999999",
@@ -180,12 +206,12 @@ npm start
 
 ```env
 # Database
-DATABASE_URL=postgresql://vizimed:vizimed_password@localhost:5433/vizimed
-MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/vizimed-agenda
+DATABASE_URL=postgresql://agent:agent_password@localhost:5433/agent
+MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/agent-agenda
 
 # APIs (⚠️ ATUALIZAR CHAVES)
 OPENAI_API_KEY=sk-proj-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 UAZAPI_KEY=...
 UAZAPI_URL=https://api.uazapi.com
 
@@ -194,17 +220,103 @@ CHATWOOT_URL=https://connect.synapsea.com.br
 CHATWOOT_API_TOKEN=81wgoQ4AWQxrJc7sHLmD23nb
 CHATWOOT_ACCOUNT_ID=1
 
+# Segurança de Webhooks (opcional, recomendado)
+UAZAPI_WEBHOOK_SECRET=seu-segredo-uazapi
+CHATWOOT_WEBHOOK_SECRET=seu-segredo-chatwoot
+
+codex/refactor-agent-for-improved-functionality-ujhmxn
+# Integration Hub (opcional, para conectores externos)
+CALCOM_API_URL=https://api.cal.com/v1
+CALCOM_API_KEY=...
+GOOGLE_CALENDAR_API_URL=https://www.googleapis.com/calendar/v3
+GOOGLE_CALENDAR_TOKEN=...
+GOOGLE_SHEETS_API_URL=https://sheets.googleapis.com/v4/spreadsheets
+GOOGLE_SHEETS_TOKEN=...
+META_API_URL=https://graph.facebook.com/v20.0
+META_API_TOKEN=...
+RD_STATION_API_URL=https://api.rd.services
+RD_STATION_TOKEN=...
+
+main
 # Server
 PORT=3000
 NODE_ENV=development
 LOG_LEVEL=debug
 FOLLOW_UP_DELAY_HOURS=24
 COLD_STORAGE_DAYS=7
+
+# Hardening (recomendado em produção)
+CORS_ALLOWED_ORIGINS=https://app.suaempresa.com,https://painel.suaempresa.com
+ENABLE_TEST_ENDPOINTS=false
+REQUIRE_WEBHOOK_SECRETS=true
+DB_CONNECT_MAX_ATTEMPTS=5
+DB_CONNECT_RETRY_MS=2000
+
+# Segurança avançada de integração
+INTEGRATION_API_KEYS=key-prod-1,key-prod-2
+INTEGRATION_ALLOWED_HOSTS=api.cal.com,graph.facebook.com,api.rd.services
+
+# Multi-tenant
+# obrigatório enviar header x-tenant-id em todas as rotas de negócio
 ```
 
 ---
 
+
+## 🎛️ Personalização do Agente (Prompt + Forma de Falar)
+
+### Onde alterar o prompt de IA
+- **Classificação de intenção**: `src/domain/intent/intent.classifier.ts` (mensagem `role: system`)
+- **Resposta conversacional do agente**: `src/domain/agent/response.generator.ts` (prompt do SDR)
+
+### Onde alterar o jeito que ele fala
+- **Tom e objetivo global**: variáveis no `.env`
+  - `AGENT_TONE`
+  - `AGENT_OBJECTIVE`
+  - `AGENT_COMPANY_NAME`
+  - `AGENT_LANGUAGE`
+  - `AGENT_MAX_REPLY_CHARS`
+- **Mensagens de follow-up automáticas**: `src/application/cron/follow-up-24h.job.ts`
+
+### Ativar/desativar resposta automática
+```env
+AGENT_AUTO_REPLY_ENABLED=true
+```
+
+Quando ativo, o webhook de WhatsApp processa a intenção e também gera uma resposta automática usando OpenAI antes de enviar via UAZAPI.
+
+### Painel HTML para configuração (sem editar .env)
+- Página: `GET /admin/agent-config`
+- API de leitura: `GET /api/admin/agent-config`
+- API de atualização: `PUT /api/admin/agent-config`
+
+Use o subdomínio desejado `sdr-synapasea.sentiia.com.br` no proxy reverso apontando para o serviço da API para gerir tom/prompt do agente em runtime.
+
+Exemplos prontos de Nginx e Traefik estão em `DEPLOYMENT_GUIDE.md` na seção **Subdomínio para o Painel de Configuração do Agente**.
+
+Se quiser proteger a API de configuração, defina no `.env`:
+```env
+ADMIN_CONFIG_TOKEN=seu-token-forte
+```
+
+### Como gerar o token de acesso
+```bash
+# OpenSSL (recomendado)
+openssl rand -hex 32
+
+# ou Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Depois copie o token gerado para `ADMIN_CONFIG_TOKEN` e use no header `x-admin-token` ao salvar/carregar a configuração no painel.
+
+---
+
 ## 🛠️ Desenvolvimento
+
+### Contribuição
+- Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para padrões de colaboração.
+- Títulos e descrições de PR devem ser escritos em **Português (Brasil)**.
 
 ### Build
 ```bash
@@ -213,7 +325,7 @@ npm run build
 
 ### Logs
 ```bash
-tail -f /tmp/vizimed.log
+tail -f /tmp/agent.log
 ```
 
 ### Testes
@@ -261,7 +373,7 @@ Propriedade da Synapsea.
 ```bash
 # Clone o repositório
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 
 # Executar setup automático
 bash setup.sh
@@ -305,12 +417,12 @@ src/
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/vizimed
-MONGODB_URL=mongodb://localhost:27017/vizimed
+DATABASE_URL=postgresql://user:pass@localhost:5432/agent
+MONGODB_URL=mongodb://localhost:27017/agent
 
 # OpenAI
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 
 # Chatwoot
 CHATWOOT_URL=https://chatwoot.example.com
@@ -409,7 +521,7 @@ logs/
 
 ## 📄 Licença
 
-Proprietary - VIZIMED
+Proprietary - SDR
 
 ## 📞 Suporte
 

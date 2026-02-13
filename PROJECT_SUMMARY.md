@@ -1,12 +1,12 @@
 // PROJECT_SUMMARY.md
 
-# ✅ VIZIMED AGENT V2 - Projeto Concluído
+# ✅ SDR AGENT CORE - Projeto Concluído
 
 ## 📦 Estrutura Criada
 
 ### Pastas Principais
 ```
-vizimed-agent/
+sdr-agent/
 ├── src/
 │   ├── config/              ✅ Configuração (env, secrets)
 │   ├── database/            ✅ Prisma client e conexão
@@ -143,7 +143,7 @@ vizimed-agent/
 
 ### Quick Start
 ```bash
-cd /root/home/agente de i.a/vizimed-agent
+cd /root/home/agente de i.a/sdr-agent
 
 # Setup automático (5 min)
 bash setup.sh
@@ -172,8 +172,8 @@ npm run dev  # Em outro terminal
 Adicione ao `.env`:
 
 ```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/vizimed
-MONGODB_URL=mongodb://localhost:27017/vizimed
+DATABASE_URL=postgresql://user:password@localhost:5432/agent
+MONGODB_URL=mongodb://localhost:27017/agent
 REDIS_URL=redis://localhost:6379
 
 OPENAI_API_KEY=sk-...
@@ -262,7 +262,7 @@ PORT=3000
 
 ---
 
-**Projeto**: VIZIMED AGENT V2
+**Projeto**: SDR AGENT CORE
 **Status**: 🟢 Production Ready
 **Versão**: 2.0.0
 **Data**: 2024-01-27

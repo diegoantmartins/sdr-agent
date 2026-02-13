@@ -11,6 +11,26 @@ import { LeadService } from './domain/lead/lead.service';
 import { setupAgenda } from './application/cron/agenda-setup';
 import { getUAZAPIClient } from './infra/uazapi/uazapi.client';
 import { chatService } from './services/chatwootService';
+import { isWebhookAuthorized } from './application/webhooks/webhook-auth';
+codex/refactor-agent-for-improved-functionality-ujhmxn
+codex/refactor-agent-for-improved-functionality-ujhmxn
+import { integrationHubService } from './services/integrations/integration-hub.service';
+import {
+  IntegrationAction,
+  IntegrationProvider,
+  PROVIDER_CAPABILITIES
+} from './domain/integrations/integration.types';
+import { AppError, ValidationError } from './shared/utils/errors';
+import { assertRole, parseApiKeys } from './shared/utils/auth';
+import { enforceTenantRateLimit } from './shared/utils/rate-limit';
+import { ConversationMetricsService } from './services/metrics/conversation-metrics.service';
+import { commercialEngineService } from './services/commercial/commercial-engine.service';
+ main
+
+import { ResponseGenerator } from './domain/agent/response.generator';
+import { AgentConfigStore } from './domain/agent/agent-config.store';
+import { buildAgentConfigPage } from './presentation/admin/agent-config.page';
+ main
 
 // Instâncias globais
 let prisma: PrismaClient;
@@ -18,14 +38,104 @@ let app: FastifyInstance;
 let intentClassifier: IntentClassifier;
 let leadService: LeadService;
 let uazapiClient: any;
+ codex/refactor-agent-for-improved-functionality-ujhmxn
+let conversationMetricsService: ConversationMetricsService;
+
+function parseAllowedOrigins(originsCsv?: string): string[] {
+  if (!originsCsv) return [];
+  return originsCsv
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function getTenantIdFromHeaders(headers: Record<string, any>): string {
+  const tenantIdHeader = headers['x-tenant-id'];
+  const tenantId = Array.isArray(tenantIdHeader) ? tenantIdHeader[0] : tenantIdHeader;
+  if (!tenantId || typeof tenantId !== 'string') {
+    throw new ValidationError('x-tenant-id é obrigatório');
+  }
+  return tenantId;
+}
+
+function getIntegrationApiKeys(): string[] {
+  return (config.INTEGRATION_API_KEYS || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+
+function getAuthConfig() {
+  return {
+    adminKeys: parseApiKeys(config.ADMIN_API_KEYS),
+    sdrKeys: parseApiKeys(config.SDR_API_KEYS),
+    clientKeys: parseApiKeys(config.CLIENT_API_KEYS)
+  };
+}
+function assertIntegrationKey(headers: Record<string, any>): void {
+  const allowedKeys = getIntegrationApiKeys();
+  if (allowedKeys.length === 0) {
+    throw new ValidationError('INTEGRATION_API_KEYS não configurado');
+  }
+
+  const raw = headers['x-integration-key'];
+  const providedKey = Array.isArray(raw) ? raw[0] : raw;
+  if (!providedKey || !allowedKeys.includes(String(providedKey))) {
+    throw new ValidationError('x-integration-key inválido');
+  }
+}
+
+async function auditEvent(
+  tenantId: string,
+  action: string,
+  success: boolean,
+  metadata: Record<string, any> = {},
+  actor?: string
+): Promise<void> {
+  try {
+    await prisma.governanceAudit.create({
+      data: {
+        tenantId,
+        action,
+        actor,
+        success,
+        metadata
+      }
+    });
+  } catch (error) {
+    logger.warn('[GovernanceAudit] falha ao registrar evento', { tenantId, action, error: String(error) });
+  }
+}
+
+async function connectWithRetry(client: PrismaClient): Promise<void> {
+  const maxAttempts = Math.max(1, config.DB_CONNECT_MAX_ATTEMPTS);
+  const delayMs = Math.max(250, config.DB_CONNECT_RETRY_MS);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await client.$connect();
+      logger.info(`✅ PostgreSQL conectado (tentativa ${attempt}/${maxAttempts})`);
+      return;
+    } catch (error) {
+      logger.error(`❌ Falha ao conectar PostgreSQL (tentativa ${attempt}/${maxAttempts})`, error);
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+let agentConfigStore: AgentConfigStore;
+ main
 
 async function initializeApp(): Promise<FastifyInstance> {
   // ========== Database Setup ==========
   prisma = new PrismaClient();
 
   try {
-    await prisma.$connect();
-    logger.info('✅ PostgreSQL conectado');
+    await connectWithRetry(prisma);
   } catch (error) {
     logger.error('❌ Erro ao conectar PostgreSQL:', error);
     process.exit(1);
@@ -34,7 +144,32 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== Services Setup ==========
   intentClassifier = new IntentClassifier(config.OPENAI_API_KEY, config.OPENAI_MODEL);
   leadService = new LeadService(prisma);
+  conversationMetricsService = new ConversationMetricsService(prisma);
   uazapiClient = getUAZAPIClient();
+  agentConfigStore = new AgentConfigStore(config.AGENT_CONFIG_PATH, {
+    autoReplyEnabled: config.AGENT_AUTO_REPLY_ENABLED,
+    companyName: config.AGENT_COMPANY_NAME,
+    objective: config.AGENT_OBJECTIVE,
+    tone: config.AGENT_TONE,
+    language: config.AGENT_LANGUAGE,
+    maxReplyChars: config.AGENT_MAX_REPLY_CHARS,
+    businessNiche: 'SaaS B2B',
+    salesType: 'consultiva',
+    primaryCTA: 'Posso te mostrar o próximo passo ideal para o seu cenário?',
+    qualificationQuestions: [
+      'Qual principal desafio você quer resolver agora?',
+      'Qual prazo você tem para implementar?',
+      'Quem participa da decisão?'
+    ],
+    customPrompt: '',
+    fallbackMessage: 'Perfeito! Posso te ajudar com o próximo passo agora.',
+    emojisEnabled: true,
+    handoffEnabled: true,
+    sendToChatwoot: true,
+    sendToSlack: false,
+    disallowedTerms: []
+  });
+  await agentConfigStore.init();
 
   // ========== Fastify Setup ==========
   const app = Fastify({
@@ -43,9 +178,37 @@ async function initializeApp(): Promise<FastifyInstance> {
     }
   });
 
+  app.addHook('onRequest', async (request, _reply) => {
+    const requestId = request.id || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    (request as any).requestContext = {
+      requestId
+    };
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    const requestId = (request as any)?.requestContext?.requestId || request.id;
+    const isAppError = error instanceof AppError;
+
+    logger.error('[HTTP] Unhandled error', {
+      requestId,
+      method: request.method,
+      url: request.url,
+      statusCode: isAppError ? error.statusCode : 500,
+      code: isAppError ? error.code : 'INTERNAL_SERVER_ERROR',
+      message: error.message
+    });
+
+    return reply.code(isAppError ? error.statusCode : 500).send({
+      error: isAppError ? error.code : 'INTERNAL_SERVER_ERROR',
+      message: error.message,
+      requestId
+    });
+  });
+
   // Middleware
+  const allowedOrigins = parseAllowedOrigins(config.CORS_ALLOWED_ORIGINS);
   await app.register(fastifyCors, {
-    origin: true,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : config.NODE_ENV !== 'production',
     credentials: true
   });
 
@@ -63,9 +226,76 @@ async function initializeApp(): Promise<FastifyInstance> {
     }
   });
 
+
+
+  const isAdminRequestAuthorized = (headerValue: string | string[] | undefined): boolean => {
+    if (!config.ADMIN_CONFIG_TOKEN) {
+      return true;
+    }
+
+    const provided = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    return provided === config.ADMIN_CONFIG_TOKEN;
+  };
+
+  // ========== ADMIN: Agent Config UI/API ==========
+  app.get('/admin/agent-config', async (_request, reply) => {
+    return reply.type('text/html; charset=utf-8').send(buildAgentConfigPage());
+  });
+
+  app.get('/api/admin/agent-config', async (request, reply) => {
+    if (!isAdminRequestAuthorized(request.headers['x-admin-token'])) {
+      return reply.code(401).send({ error: 'unauthorized' });
+    }
+
+    return reply.send(agentConfigStore.getConfig());
+  });
+
+  app.put('/api/admin/agent-config', async (request, reply) => {
+    if (!isAdminRequestAuthorized(request.headers['x-admin-token'])) {
+      return reply.code(401).send({ error: 'unauthorized' });
+    }
+
+    const body = request.body as Record<string, unknown>;
+    const updated = await agentConfigStore.updateConfig({
+      autoReplyEnabled: typeof body.autoReplyEnabled === 'boolean' ? body.autoReplyEnabled : undefined,
+      companyName: typeof body.companyName === 'string' ? body.companyName : undefined,
+      objective: typeof body.objective === 'string' ? body.objective : undefined,
+      tone: typeof body.tone === 'string' ? body.tone : undefined,
+      language: typeof body.language === 'string' ? body.language : undefined,
+      maxReplyChars: typeof body.maxReplyChars === 'number' ? body.maxReplyChars : undefined,
+      businessNiche: typeof body.businessNiche === 'string' ? body.businessNiche : undefined,
+      salesType: typeof body.salesType === 'string' ? body.salesType as any : undefined,
+      primaryCTA: typeof body.primaryCTA === 'string' ? body.primaryCTA : undefined,
+      qualificationQuestions: Array.isArray(body.qualificationQuestions) ? body.qualificationQuestions as any : undefined,
+      customPrompt: typeof body.customPrompt === 'string' ? body.customPrompt : undefined,
+      fallbackMessage: typeof body.fallbackMessage === 'string' ? body.fallbackMessage : undefined,
+      emojisEnabled: typeof body.emojisEnabled === 'boolean' ? body.emojisEnabled : undefined,
+      handoffEnabled: typeof body.handoffEnabled === 'boolean' ? body.handoffEnabled : undefined,
+      sendToChatwoot: typeof body.sendToChatwoot === 'boolean' ? body.sendToChatwoot : undefined,
+      sendToSlack: typeof body.sendToSlack === 'boolean' ? body.sendToSlack : undefined,
+      disallowedTerms: Array.isArray(body.disallowedTerms) ? body.disallowedTerms as any : undefined
+    });
+
+    return reply.send(updated);
+  });
+
   // ========== WEBHOOK: UAZAPI (WhatsApp Incoming) ==========
   app.post('/webhooks/uazapi/message', async (request, reply) => {
     try {
+codex/refactor-agent-for-improved-functionality-ujhmxn
+      if (config.REQUIRE_WEBHOOK_SECRETS && !config.UAZAPI_WEBHOOK_SECRET) {
+        throw new ValidationError('UAZAPI_WEBHOOK_SECRET é obrigatório quando REQUIRE_WEBHOOK_SECRETS=true');
+      }
+
+ main
+      if (!isWebhookAuthorized(request.headers, { expectedSecret: config.UAZAPI_WEBHOOK_SECRET })) {
+        logger.warn('[WEBHOOK:UAZAPI] Tentativa com segredo inválido');
+        return reply.code(401).send({ error: 'unauthorized webhook' });
+      }
+
+ codex/refactor-agent-for-improved-functionality-ujhmxn
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+ main
       const { phone, name, message, messageId, timestamp } = request.body as any;
 
       if (!phone || !message) {
@@ -75,10 +305,11 @@ async function initializeApp(): Promise<FastifyInstance> {
       logger.info(`[WEBHOOK:UAZAPI] Mensagem recebida de ${phone}`);
 
       // 1. Criar ou buscar lead
-      let lead = await leadService.getLead(phone);
+      let lead = await leadService.getLead(tenantId, phone);
 
       if (!lead) {
         lead = await leadService.createLead({
+          tenantId,
           phone,
           name: name || 'Lead sem nome',
           source: 'whatsapp'
@@ -87,10 +318,15 @@ async function initializeApp(): Promise<FastifyInstance> {
 
       // 2. Salvar mensagem (tratar duplicatas de chatwootMessageId)
       let messageRecord;
+ codex/improve-project-features
       let isNewMessage = false;
+
+      let isDuplicate = false;
+ main
       try {
         messageRecord = await prisma.message.create({
           data: {
+            tenantId,
             leadId: lead.id,
             content: message,
             type: 'incoming',
@@ -102,16 +338,29 @@ async function initializeApp(): Promise<FastifyInstance> {
         // P2002 = Unique constraint failed
         if (err.code === 'P2002' && err.meta?.target?.includes('chatwootMessageId')) {
           logger.warn('[WEBHOOK:UAZAPI] Mensagem duplicada detectada, buscando registro existente');
+          isDuplicate = true;
           messageRecord = await prisma.message.findFirst({ where: { chatwootMessageId: messageId } });
         } else {
           throw err;
         }
       }
 
+ codex/improve-project-features
       if (isNewMessage) {
         await leadService.incrementMessageCount(phone);
       }
 
+
+      if (isDuplicate) {
+        await auditEvent(tenantId, 'webhook_uazapi_duplicate', true, { phone, messageId });
+        return reply.code(200).send({ success: true, messageId, duplicate: true });
+      }
+
+      // 2.1 Atualizar contadores e atividade do lead
+      await leadService.registerIncomingMessage(tenantId, phone);
+      await conversationMetricsService.registerMessage(lead.id, 'incoming');
+
+ main
       // 3. Sincronizar com Chatwoot (async, não bloqueia resposta)
       chatService.syncMessage({
         phone,
@@ -126,7 +375,7 @@ async function initializeApp(): Promise<FastifyInstance> {
       const intentResult = await intentClassifier.classify(message);
 
       // 5. Atualizar lead com intent
-      await leadService.updateLead(phone, {
+      await leadService.updateLead(tenantId, phone, {
         intentClassified: intentResult.intent,
         conversionStage: 'consideration'
       });
@@ -140,17 +389,65 @@ async function initializeApp(): Promise<FastifyInstance> {
       }
 
       if (scoreChange > 0) {
-        await leadService.incrementScore(phone, scoreChange);
+        await leadService.incrementScore(tenantId, phone, scoreChange);
       }
 
       // 7. Atualizar status se score for alto
-      const updatedLead = await leadService.getLead(phone);
+      const updatedLead = await leadService.getLead(tenantId, phone);
       if (updatedLead && updatedLead.score > 80 && intentResult.intent === 'BUY_NOW') {
-        await leadService.updateLead(phone, { status: 'HOT' });
+        await leadService.updateLead(tenantId, phone, { status: 'HOT' });
+      }
+
+      // 8. Gerar e enviar resposta automática (config dinâmica)
+      const agentConfig = agentConfigStore.getConfig();
+      let autoReply: string | undefined;
+      if (agentConfig.autoReplyEnabled && updatedLead) {
+        const responseGenerator = new ResponseGenerator(config.OPENAI_API_KEY, config.OPENAI_MODEL, {
+          companyName: agentConfig.companyName,
+          objective: agentConfig.objective,
+          tone: agentConfig.tone,
+          language: agentConfig.language,
+          maxReplyChars: agentConfig.maxReplyChars,
+          businessNiche: agentConfig.businessNiche,
+          salesType: agentConfig.salesType,
+          primaryCTA: agentConfig.primaryCTA,
+          qualificationQuestions: agentConfig.qualificationQuestions,
+          customPrompt: agentConfig.customPrompt,
+          disallowedTerms: agentConfig.disallowedTerms,
+          fallbackMessage: agentConfig.fallbackMessage,
+          emojisEnabled: agentConfig.emojisEnabled
+        });
+
+        autoReply = await responseGenerator.generateReply({
+          leadName: updatedLead.name || name || 'cliente',
+          incomingMessage: message,
+          intent: intentResult.intent,
+          score: updatedLead.score,
+          conversationStage: updatedLead.conversionStage
+        });
+
+        await uazapiClient.sendMessage({
+          phone,
+          message: autoReply
+        });
+
+        await prisma.message.create({
+          data: {
+            leadId: updatedLead.id,
+            content: autoReply,
+            type: 'outgoing',
+            isAiGenerated: true,
+            intentDetected: intentResult.intent
+          }
+        });
       }
 
       logger.info(`[WEBHOOK:UAZAPI] ✅ Mensagem processada - Intent: ${intentResult.intent}`);
+ codex/refactor-agent-for-improved-functionality-ujhmxn
+      await auditEvent(tenantId, 'webhook_uazapi_processed', true, { phone, intent: intentResult.intent });
       return reply.code(200).send({ success: true, messageId });
+
+ main
     } catch (error) {
       logger.error('[WEBHOOK:UAZAPI] ❌ Erro:', error);
       return reply.code(500).send({ error: String(error) });
@@ -160,10 +457,65 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== WEBHOOK: Chatwoot (Message) ==========
   app.post('/webhooks/chatwoot/message-created', async (request, reply) => {
     try {
+ codex/refactor-agent-for-improved-functionality-ujhmxn
+      if (config.REQUIRE_WEBHOOK_SECRETS && !config.CHATWOOT_WEBHOOK_SECRET) {
+        throw new ValidationError('CHATWOOT_WEBHOOK_SECRET é obrigatório quando REQUIRE_WEBHOOK_SECRETS=true');
+      }
+
+ main
+      if (!isWebhookAuthorized(request.headers, { expectedSecret: config.CHATWOOT_WEBHOOK_SECRET })) {
+        logger.warn('[WEBHOOK:CHATWOOT] Tentativa com segredo inválido');
+        return reply.code(401).send({ error: 'unauthorized webhook' });
+      }
+
+ codex/refactor-agent-for-improved-functionality-ujhmxn
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+ main
       const payload = request.body as any;
-      const { message, conversation } = payload;
+      const { message, conversation, contact } = payload;
+
+      const messageContent = message?.content || message?.text || payload?.content;
+      const phone = contact?.phone_number || conversation?.meta?.sender?.phone_number;
+      const name = contact?.name || conversation?.meta?.sender?.name || 'Lead sem nome';
 
       logger.info(`[WEBHOOK:CHATWOOT] Mensagem no Chatwoot`);
+
+      if (phone && messageContent) {
+        let lead = await leadService.getLead(tenantId, phone);
+        if (!lead) {
+          lead = await leadService.createLead({
+            tenantId,
+            phone,
+            name,
+            source: 'chatwoot'
+          });
+        }
+
+        await prisma.message.create({
+          data: {
+            tenantId,
+            leadId: lead.id,
+            content: messageContent,
+            type: message?.message_type === 1 ? 'outgoing' : 'incoming',
+            chatwootMessageId: String(message?.id || payload?.id || '') || undefined
+          }
+        }).catch((err: any) => {
+          if (!(err.code === 'P2002' && err.meta?.target?.includes('chatwootMessageId'))) {
+            throw err;
+          }
+        });
+
+        const isOutgoing = message?.message_type === 1;
+        if (!isOutgoing) {
+          await leadService.registerIncomingMessage(tenantId, phone);
+        }
+        await conversationMetricsService.registerMessage(lead.id, isOutgoing ? 'outgoing' : 'incoming');
+      }
+
+      await auditEvent(tenantId, 'webhook_chatwoot_processed', true, {
+        hasPhone: Boolean(phone),
+        messageId: message?.id || payload?.id
+      });
 
       return reply.code(200).send({ success: true });
     } catch (error) {
@@ -175,7 +527,10 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Get Leads ==========
   app.get('/api/leads', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'client', getAuthConfig());
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const leads = await prisma.activeLead.findMany({
+        where: { tenantId },
         take: 50,
         orderBy: { score: 'desc' }
       });
@@ -190,6 +545,8 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Create Lead ==========
   app.post('/api/leads', async (request, reply) => {
     try {
+      assertRole(request.headers as any, 'sdr', getAuthConfig());
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
       const body = request.body as Record<string, any>;
       const { phone, name, email, company, source, campaignId, metadata } = body;
 
@@ -198,6 +555,7 @@ async function initializeApp(): Promise<FastifyInstance> {
       }
 
       const lead = await leadService.createLead({
+        tenantId,
         phone,
         name: name || 'Lead sem nome',
         email,
@@ -220,15 +578,17 @@ async function initializeApp(): Promise<FastifyInstance> {
     '/api/leads/:phone',
     async (request, reply) => {
       try {
+        assertRole(request.headers as any, 'client', getAuthConfig());
+        const tenantId = getTenantIdFromHeaders(request.headers as any);
         const { phone } = request.params;
-        const lead = await leadService.getLead(phone);
+        const lead = await leadService.getLead(tenantId, phone);
 
         if (!lead) {
           return reply.code(404).send({ error: 'Lead not found' });
         }
 
         const messages = await prisma.message.findMany({
-          where: { leadId: lead.id },
+          where: { leadId: lead.id, tenantId },
           orderBy: { createdAt: 'desc' }
         });
 
@@ -243,7 +603,9 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== API: Hot Leads ==========
   app.get('/api/leads/hot', async (request, reply) => {
     try {
-      const hotLeads = await leadService.getHotLeads();
+      assertRole(request.headers as any, 'client', getAuthConfig());
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+      const hotLeads = await leadService.getHotLeads(tenantId);
       return reply.send({ leads: hotLeads });
     } catch (error) {
       logger.error('[API:HOT_LEADS] Erro:', error);
@@ -251,8 +613,9 @@ async function initializeApp(): Promise<FastifyInstance> {
     }
   });
 
-  // ========== TEST: UAZAPI Connection ==========
-  app.get('/test/uazapi', async (request, reply) => {
+  if (config.ENABLE_TEST_ENDPOINTS || config.NODE_ENV !== 'production') {
+    // ========== TEST: UAZAPI Connection ==========
+    app.get('/test/uazapi', async (request, reply) => {
     try {
       const isHealthy = await uazapiClient.healthCheck();
       return reply.send({
@@ -267,12 +630,12 @@ async function initializeApp(): Promise<FastifyInstance> {
         error: String(error)
       });
     }
-  });
+    });
 
   // ========== TEST: Send Test Message ==========
-  app.post<{ Body: { phone: string; message: string } }>(
-    '/test/send-message',
-    async (request, reply) => {
+    app.post<{ Body: { phone: string; message: string } }>(
+      '/test/send-message',
+      async (request, reply) => {
       try {
         const { phone, message } = request.body;
 
@@ -286,9 +649,13 @@ async function initializeApp(): Promise<FastifyInstance> {
 
         // Simular webhook do UAZAPI
         try {
+          const tenantId = getTenantIdFromHeaders(request.headers as any);
           const webhookResponse = await fetch('http://localhost:3000/webhooks/uazapi/message', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-tenant-id': tenantId
+            },
             body: JSON.stringify({
               phone,
               name: 'Teste',
@@ -316,11 +683,11 @@ async function initializeApp(): Promise<FastifyInstance> {
           error: String(error)
         });
       }
-    }
-  );
+      }
+    );
 
   // ========== TEST: Database Connection ==========
-  app.get('/test/database', async (request, reply) => {
+    app.get('/test/database', async (request, reply) => {
     try {
       const result = await prisma.$queryRaw`SELECT NOW()`;
       const leadCount = await prisma.activeLead.count();
@@ -339,10 +706,10 @@ async function initializeApp(): Promise<FastifyInstance> {
         error: String(error)
       });
     }
-  });
+    });
 
   // ========== TEST: Chatwoot Connection ==========
-  app.get('/test/chatwoot', async (request, reply) => {
+    app.get('/test/chatwoot', async (request, reply) => {
     try {
       const axios = require('axios');
       const chatClient = axios.create({
@@ -369,11 +736,11 @@ async function initializeApp(): Promise<FastifyInstance> {
         error: errorMsg
       });
     }
-  });
+    });
 
   // ========== TEST: All Services ==========
-  app.get('/test/all', async (request, reply) => {
-    const results: any = {};
+    app.get('/test/all', async (request, reply) => {
+      const results: any = {};
 
     // Database
     try {
@@ -405,7 +772,104 @@ async function initializeApp(): Promise<FastifyInstance> {
       results.chatwoot = { status: 'error', error: String(e) };
     }
 
-    return reply.send(results);
+      return reply.send(results);
+    });
+  }
+
+  // ========== API: Integration Hub ==========
+  app.get('/api/integrations/providers', async (_request, reply) => {
+    return reply.send({ providers: PROVIDER_CAPABILITIES });
+  });
+
+  app.post<{
+    Params: { provider: IntegrationProvider };
+    Body: { action: IntegrationAction; payload: Record<string, any> };
+  }>('/api/integrations/:provider/actions', async (request, reply) => {
+    try {
+      assertRole(request.headers as any, 'sdr', getAuthConfig());
+      assertIntegrationKey(request.headers as any);
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+      enforceTenantRateLimit(tenantId, 'integration_execute', config.INTEGRATION_RATE_LIMIT_PER_MINUTE, 60_000);
+      const { provider } = request.params;
+      const { action, payload } = request.body || ({} as any);
+
+      if (!action) {
+        return reply.code(400).send({ error: 'action é obrigatório' });
+      }
+
+      if (!Object.keys(PROVIDER_CAPABILITIES).includes(provider)) {
+        return reply.code(400).send({ error: `provider inválido: ${provider}` });
+      }
+
+      const result = await integrationHubService.execute({
+        provider,
+        action,
+        payload: payload || {}
+      });
+
+      await auditEvent(tenantId, 'integration_execute', result.success, {
+        provider,
+        action
+      });
+
+      if (!result.success) {
+        return reply.code(502).send(result);
+      }
+
+      return reply.code(200).send(result);
+    } catch (error) {
+      logger.error('[API:INTEGRATIONS] Erro:', error);
+      return reply.code(500).send({ error: String(error) });
+    }
+  });
+
+  // ========== API: Commercial Engine ==========
+  app.get('/api/commercial/templates', async (request, reply) => {
+    assertRole(request.headers as any, 'client', getAuthConfig());
+    return reply.send({ templates: commercialEngineService.getTemplates() });
+  });
+
+  app.get<{ Params: { niche: string } }>('/api/commercial/templates/:niche', async (request, reply) => {
+    try {
+      assertRole(request.headers as any, 'client', getAuthConfig());
+      const template = commercialEngineService.getTemplateByNiche(request.params.niche);
+      return reply.send({ template });
+    } catch (error) {
+      logger.error('[API:COMMERCIAL:TEMPLATE] Erro:', error);
+      return reply.code(400).send({ error: String(error) });
+    }
+  });
+
+  app.post<{
+    Body: { niche: string; leadStage?: string; intent?: 'BUY_NOW' | 'SUPPORT' | 'TRIAGE'; score?: number }
+  }>('/api/commercial/next-action', async (request, reply) => {
+    try {
+      assertRole(request.headers as any, 'sdr', getAuthConfig());
+      const tenantId = getTenantIdFromHeaders(request.headers as any);
+      const { niche, leadStage, intent, score } = request.body || ({} as any);
+      if (!niche) {
+        return reply.code(400).send({ error: 'niche é obrigatório' });
+      }
+
+      const recommendation = commercialEngineService.getNextBestAction({
+        niche,
+        leadStage,
+        intent,
+        score
+      });
+
+      await auditEvent(tenantId, 'commercial_next_action', true, {
+        niche,
+        leadStage,
+        intent,
+        score: score ?? null
+      });
+
+      return reply.send({ recommendation });
+    } catch (error) {
+      logger.error('[API:COMMERCIAL:NEXT_ACTION] Erro:', error);
+      return reply.code(400).send({ error: String(error) });
+    }
   });
 
   return app;

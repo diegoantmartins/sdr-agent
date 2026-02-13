@@ -9,9 +9,15 @@ async function main() {
 
   // Criar alguns leads de exemplo
   const lead1 = await prisma.activeLead.upsert({
-    where: { phone: '5511999999999' },
+    where: {
+      tenant_phone_unique: {
+        tenantId: 'default',
+        phone: '5511999999999'
+      }
+    },
     update: {},
     create: {
+      tenantId: 'default',
       phone: '5511999999999',
       name: 'João Silva',
       email: 'joao@example.com',
@@ -23,9 +29,15 @@ async function main() {
   });
 
   const lead2 = await prisma.activeLead.upsert({
-    where: { phone: '5511988888888' },
+    where: {
+      tenant_phone_unique: {
+        tenantId: 'default',
+        phone: '5511988888888'
+      }
+    },
     update: {},
     create: {
+      tenantId: 'default',
       phone: '5511988888888',
       name: 'Maria Santos',
       email: 'maria@example.com',

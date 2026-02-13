@@ -1,4 +1,4 @@
-# 📝 EXEMPLOS DE REQUISIÇÕES - VIZIMED API
+# 📝 EXEMPLOS DE REQUISIÇÕES - SDR API
 
 **Base URL**: `http://localhost:3000`
 

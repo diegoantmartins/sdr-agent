@@ -1,4 +1,4 @@
-# Deployment Guide - VIZIMED Agent V2
+# Deployment Guide - SDR Agent Core
 
 ## 📋 Índice
 1. [Quick Start](#quick-start)
@@ -15,7 +15,7 @@
 ```bash
 # 1. Clonar repositório
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 
 # 2. Executar setup automático (cria estrutura, instala deps, rodas migrations)
 bash setup.sh
@@ -43,7 +43,7 @@ Server rodará em: **http://localhost:3000**
 
 ```bash
 git clone <repo>
-cd vizimed-agent
+cd sdr-agent
 npm install
 ```
 
@@ -76,6 +76,86 @@ npm run build
 
 # Iniciar servidor
 npm start
+```
+
+---
+
+## 🌐 Subdomínio para o Painel de Configuração do Agente
+
+Com o painel em `GET /admin/agent-config`, você pode publicar em um subdomínio dedicado como:
+
+- `sdr-synapasea.sentiia.com.br` → rota de UI
+- `sdr-synapasea.sentiia.com.br/api/admin/agent-config` → API de configuração
+
+> Recomendado em produção: definir `ADMIN_CONFIG_TOKEN` e restringir acesso por IP/VPN no proxy.
+
+
+### Passos recomendados para publicar `sdr-synapasea.sentiia.com.br`
+
+1. Criar registro DNS `A/CNAME` do subdomínio apontando para o servidor do proxy.
+2. Garantir TLS (Let's Encrypt/Cloudflare) no subdomínio.
+3. Definir token admin no servidor:
+   ```bash
+   openssl rand -hex 32
+   ```
+4. Salvar o valor em `.env`:
+   ```env
+   ADMIN_CONFIG_TOKEN=<TOKEN_GERADO>
+   ```
+5. Reiniciar o serviço Node para carregar o token.
+
+### Exemplo Nginx (subdomínio dedicado)
+
+```nginx
+upstream sdr_agent_backend {
+  server 127.0.0.1:3000;
+  keepalive 32;
+}
+
+server {
+  listen 80;
+  server_name sdr-synapasea.sentiia.com.br;
+
+  # Opcional: limite de origem/IP aqui
+  # allow 10.0.0.0/8;
+  # deny all;
+
+  location / {
+    proxy_pass http://sdr_agent_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+### Exemplo Traefik (Docker labels)
+
+```yaml
+services:
+  app:
+    image: sdr-agent:latest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent-config.rule=Host(`sdr-synapasea.sentiia.com.br`)"
+      - "traefik.http.routers.agent-config.entrypoints=websecure"
+      - "traefik.http.routers.agent-config.tls=true"
+      - "traefik.http.services.agent-config.loadbalancer.server.port=3000"
+```
+
+### Exemplo de chamada da API com token
+
+```bash
+curl -X PUT https://sdr-synapasea.sentiia.com.br/api/admin/agent-config   -H "Content-Type: application/json"   -H "x-admin-token: SEU_TOKEN"   -d '{
+    "autoReplyEnabled": true,
+    "companyName": "Minha Empresa",
+    "objective": "Qualificar e converter leads para reunião",
+    "tone": "consultivo e direto",
+    "language": "português do Brasil",
+    "maxReplyChars": 420
+  }'
 ```
 
 ---
@@ -114,8 +194,8 @@ Edite `docker-compose.yml`:
 
 ```yaml
 environment:
-  DATABASE_URL: postgresql://user:password@postgres:5432/vizimed
-  MONGODB_URL: mongodb://root:password@mongodb:27017/vizimed
+  DATABASE_URL: postgresql://user:password@postgres:5432/agent
+  MONGODB_URL: mongodb://root:password@mongodb:27017/agent
   REDIS_URL: redis://redis:6379
 ```
 
@@ -127,8 +207,8 @@ environment:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:strongpass@prod-host:5432/vizimed
-MONGODB_URL=mongodb://root:strongpass@prod-host:27017/vizimed
+DATABASE_URL=postgresql://user:strongpass@prod-host:5432/agent
+MONGODB_URL=mongodb://root:strongpass@prod-host:27017/agent
 
 # Redis (com SSL)
 REDIS_URL=redis://:password@prod-redis:6379
@@ -160,7 +240,7 @@ Crie `pm2.config.js`:
 module.exports = {
   apps: [
     {
-      name: 'vizimed-agent',
+      name: 'sdr-agent',
       script: 'dist/src/server.js',
       instances: 'max',
       exec_mode: 'cluster',
@@ -189,17 +269,17 @@ pm2 startup
 ### Nginx Reverse Proxy
 
 ```nginx
-upstream vizimed {
+upstream agent {
   server localhost:3000;
   keepalive 64;
 }
 
 server {
   listen 80;
-  server_name api.vizimed.com;
+  server_name api.agent.com;
 
   location / {
-    proxy_pass http://vizimed;
+    proxy_pass http://agent;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection 'upgrade';
@@ -212,7 +292,7 @@ server {
   # Health check
   location /health {
     access_log off;
-    proxy_pass http://vizimed;
+    proxy_pass http://agent;
   }
 }
 ```
@@ -265,7 +345,7 @@ Acessar via `/api/leads` e `/api/leads/hot`
 
 ```bash
 # Verificar PostgreSQL
-psql -h localhost -U vizimed -d vizimed
+psql -h localhost -U agent -d agent
 
 # Verificar DATABASE_URL no .env
 echo $DATABASE_URL
@@ -285,7 +365,7 @@ echo $MONGODB_URL
 
 - Verificar se `OPENAI_API_KEY` está correto
 - Verificar se a chave tem limite de chamadas
-- Verificar modelo: `OPENAI_MODEL=gpt-4o-mini`
+- Verificar modelo: `OPENAI_MODEL=gpt-5-nano`
 
 ### Erro: "Port 3000 already in use"
 

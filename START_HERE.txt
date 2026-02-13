@@ -1,6 +1,6 @@
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                               ║
-║                     🤖 VIZIMED AGENT V2 - PROJETO COMPLETO                   ║
+║                     🤖 SDR AGENT CORE - PROJETO COMPLETO                   ║
 ║                                                                               ║
 ║                        Agente de IA para Gestão de Leads                      ║
 ║                                                                               ║
@@ -8,11 +8,11 @@
 
 📁 LOCALIZAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  /root/home/agente de i.a/vizimed-agent/
+  /root/home/agente de i.a/sdr-agent/
 
 🚀 INICIALIZAÇÃO RÁPIDA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  cd /root/home/agente\ de\ i.a/vizimed-agent
+  cd /root/home/agente\ de\ i.a/sdr-agent
 
   # Opção 1: Setup Completo (Com Docker)
   bash QUICK_START.sh
@@ -146,8 +146,8 @@ MODELOS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 DATABASE
-  DATABASE_URL=postgresql://user:password@localhost:5432/vizimed
-  MONGODB_URL=mongodb://localhost:27017/vizimed-agenda
+  DATABASE_URL=postgresql://user:password@localhost:5432/agent
+  MONGODB_URL=mongodb://localhost:27017/agent-agenda
   REDIS_URL=redis://localhost:6379
 
 OPENAI (IA)

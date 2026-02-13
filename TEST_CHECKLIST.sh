@@ -2,7 +2,7 @@
 # TEST_CHECKLIST.sh - Checklist de testes do projeto
 
 echo "🧪 ============================================="
-echo "   VIZIMED AGENT V2 - TEST CHECKLIST"
+echo "   SDR AGENT CORE - TEST CHECKLIST"
 echo "============================================="
 echo ""
 

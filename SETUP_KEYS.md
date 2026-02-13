@@ -6,7 +6,7 @@
 
 ## 📋 RESUMO
 
-Para ativar completamente o VIZIMED Agent V2, você precisa de 3 chaves:
+Para ativar completamente o SDR Agent Core, você precisa de 3 chaves:
 
 | # | Serviço | Status | Tempo | Prioridade |
 |---|---------|--------|-------|-----------|
@@ -33,7 +33,7 @@ Classificar intenções de mensagens com IA (BUY_NOW, SUPPORT, CONSULTATION, etc
 #### Passo 2: Gerar Chave
 ```
 1. Clique em "+ Create new secret key"
-2. Escolha um nome (ex: "VIZIMED Agent")
+2. Escolha um nome (ex: "SDR Agent")
 3. Clique "Create secret key"
 4. COPIE a chave (aparece uma única vez!)
    Formato: sk-proj-XXXXX...
@@ -42,7 +42,7 @@ Classificar intenções de mensagens com IA (BUY_NOW, SUPPORT, CONSULTATION, etc
 #### Passo 3: Adicionar no Projeto
 ```bash
 # Abra o arquivo .env
-nano /root/home/agente\ de\ i.a/vizimed-agent/.env
+nano /root/home/agente\ de\ i.a/sdr-agent/.env
 
 # Procure por esta linha:
 OPENAI_API_KEY="sk-test-key-please-update"
@@ -104,7 +104,7 @@ Dashboard UAZAPI:
 #### Passo 3: Configurar no Projeto
 ```bash
 # Edite .env
-nano /root/home/agente\ de\ i.a/vizimed-agent/.env
+nano /root/home/agente\ de\ i.a/sdr-agent/.env
 
 # Procure:
 UAZAPI_KEY="test-key-please-update"
@@ -196,7 +196,7 @@ Depois de adicionar as 3 chaves:
 
 ```bash
 # 1. Verifique o arquivo .env
-cat /root/home/agente\ de\ i.a/vizimed-agent/.env | grep -E "OPENAI|UAZAPI|CHATWOOT"
+cat /root/home/agente\ de\ i.a/sdr-agent/.env | grep -E "OPENAI|UAZAPI|CHATWOOT"
 
 # Esperado:
 # OPENAI_API_KEY=sk-proj-...
@@ -259,10 +259,10 @@ curl http://localhost:3000/api/leads/5511999999999 | jq '.lead | {score, intentC
 ### Teste 2: Verificar Logs
 ```bash
 # Ver últimas ações
-tail -20 /tmp/vizimed.log
+tail -20 /tmp/agent.log
 
 # Procurar por erros de API
-grep -i "error\|fail" /tmp/vizimed.log | tail -10
+grep -i "error\|fail" /tmp/agent.log | tail -10
 ```
 
 ### Teste 3: Validar Jobs Automáticos
@@ -271,7 +271,7 @@ grep -i "error\|fail" /tmp/vizimed.log | tail -10
 curl http://localhost:3000/health
 
 # Logs do Agenda
-grep "Agenda\|Job" /tmp/vizimed.log | tail -10
+grep "Agenda\|Job" /tmp/agent.log | tail -10
 ```
 
 ---
@@ -320,7 +320,7 @@ Solução:
 ```
 Causa: Espaço em disco insuficiente
 Solução:
-  1. Limpar logs: rm -f /tmp/vizimed.log
+  1. Limpar logs: rm -f /tmp/agent.log
   2. Limpeza de dados antigos: (SQL custom)
   3. Aumentar disco se em produção
 ```
@@ -333,7 +333,7 @@ Solução:
 2. **Backup**: Salve as chaves em local seguro
 3. **Rotação**: Regenere chaves a cada 3 meses
 4. **Monitoramento**: Monitore usage no painel de cada API
-5. **Logs**: Todos os erros de API estão em `/tmp/vizimed.log`
+5. **Logs**: Todos os erros de API estão em `/tmp/agent.log`
 
 ---
 
@@ -341,7 +341,7 @@ Solução:
 
 **Se algo não funcionar:**
 
-1. Ver logs: `tail -f /tmp/vizimed.log`
+1. Ver logs: `tail -f /tmp/agent.log`
 2. Testar endpoint: `curl http://localhost:3000/test/all`
 3. Verificar .env: `cat .env | grep OPENAI`
 4. Documentação: Ver README.md e STATUS.md

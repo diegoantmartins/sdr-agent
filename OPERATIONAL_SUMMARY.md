@@ -1,4 +1,4 @@
-# 🎯 VIZIMED AGENT V2 - RESUMO OPERACIONAL FINAL
+# 🎯 SDR AGENT CORE - RESUMO OPERACIONAL FINAL
 
 **Data**: 27 de Janeiro de 2026  
 **Status**: ✅ **OPERANDO EM PRODUÇÃO**
@@ -120,8 +120,8 @@ curl http://localhost:3000/test/all
 
 ```bash
 # ✅ CONECTADO E TESTADO
-DATABASE_URL="postgresql://vizimed:vizimed_password@localhost:5433/vizimed"
-MONGODB_URL="mongodb://root:mongodb_password@localhost:27018/vizimed-agenda?authSource=admin"
+DATABASE_URL="postgresql://agent:agent_password@localhost:5433/agent"
+MONGODB_URL="mongodb://root:mongodb_password@localhost:27018/agent-agenda?authSource=admin"
 REDIS_URL="redis://localhost:6379"
 
 # ✅ CHATWOOT - ATUALIZADO
@@ -232,7 +232,7 @@ curl -X POST http://localhost:3000/test/send-message \
 
 **Logs em Tempo Real**:
 ```bash
-tail -f /tmp/vizimed.log
+tail -f /tmp/agent.log
 ```
 
 **Reiniciar Servidor**:
@@ -260,7 +260,7 @@ npm start
 
 ---
 
-**✨ Sistema VIZIMED Agent V2 está 99% pronto para operação!**
+**✨ Sistema SDR Agent Core está 99% pronto para operação!**
 
 **Aguardando apenas:**
 - ✅ OpenAI API Key (para IA de classificação)

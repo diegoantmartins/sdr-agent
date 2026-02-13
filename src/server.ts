@@ -13,6 +13,7 @@ import { getUAZAPIClient } from './infra/uazapi/uazapi.client';
 import { chatService } from './services/chatwootService';
 import { isWebhookAuthorized } from './application/webhooks/webhook-auth';
 codex/refactor-agent-for-improved-functionality-ujhmxn
+codex/refactor-agent-for-improved-functionality-ujhmxn
 import { integrationHubService } from './services/integrations/integration-hub.service';
 import {
   IntegrationAction,
@@ -26,12 +27,18 @@ import { ConversationMetricsService } from './services/metrics/conversation-metr
 import { commercialEngineService } from './services/commercial/commercial-engine.service';
  main
 
+import { ResponseGenerator } from './domain/agent/response.generator';
+import { AgentConfigStore } from './domain/agent/agent-config.store';
+import { buildAgentConfigPage } from './presentation/admin/agent-config.page';
+ main
+
 // Instâncias globais
 let prisma: PrismaClient;
 let app: FastifyInstance;
 let intentClassifier: IntentClassifier;
 let leadService: LeadService;
 let uazapiClient: any;
+ codex/refactor-agent-for-improved-functionality-ujhmxn
 let conversationMetricsService: ConversationMetricsService;
 
 function parseAllowedOrigins(originsCsv?: string): string[] {
@@ -120,6 +127,9 @@ async function connectWithRetry(client: PrismaClient): Promise<void> {
   }
 }
 
+let agentConfigStore: AgentConfigStore;
+ main
+
 async function initializeApp(): Promise<FastifyInstance> {
   // ========== Database Setup ==========
   prisma = new PrismaClient();
@@ -136,6 +146,30 @@ async function initializeApp(): Promise<FastifyInstance> {
   leadService = new LeadService(prisma);
   conversationMetricsService = new ConversationMetricsService(prisma);
   uazapiClient = getUAZAPIClient();
+  agentConfigStore = new AgentConfigStore(config.AGENT_CONFIG_PATH, {
+    autoReplyEnabled: config.AGENT_AUTO_REPLY_ENABLED,
+    companyName: config.AGENT_COMPANY_NAME,
+    objective: config.AGENT_OBJECTIVE,
+    tone: config.AGENT_TONE,
+    language: config.AGENT_LANGUAGE,
+    maxReplyChars: config.AGENT_MAX_REPLY_CHARS,
+    businessNiche: 'SaaS B2B',
+    salesType: 'consultiva',
+    primaryCTA: 'Posso te mostrar o próximo passo ideal para o seu cenário?',
+    qualificationQuestions: [
+      'Qual principal desafio você quer resolver agora?',
+      'Qual prazo você tem para implementar?',
+      'Quem participa da decisão?'
+    ],
+    customPrompt: '',
+    fallbackMessage: 'Perfeito! Posso te ajudar com o próximo passo agora.',
+    emojisEnabled: true,
+    handoffEnabled: true,
+    sendToChatwoot: true,
+    sendToSlack: false,
+    disallowedTerms: []
+  });
+  await agentConfigStore.init();
 
   // ========== Fastify Setup ==========
   const app = Fastify({
@@ -190,6 +224,59 @@ async function initializeApp(): Promise<FastifyInstance> {
     } catch (error) {
       return reply.code(503).send({ status: 'error', error: String(error) });
     }
+  });
+
+
+
+  const isAdminRequestAuthorized = (headerValue: string | string[] | undefined): boolean => {
+    if (!config.ADMIN_CONFIG_TOKEN) {
+      return true;
+    }
+
+    const provided = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    return provided === config.ADMIN_CONFIG_TOKEN;
+  };
+
+  // ========== ADMIN: Agent Config UI/API ==========
+  app.get('/admin/agent-config', async (_request, reply) => {
+    return reply.type('text/html; charset=utf-8').send(buildAgentConfigPage());
+  });
+
+  app.get('/api/admin/agent-config', async (request, reply) => {
+    if (!isAdminRequestAuthorized(request.headers['x-admin-token'])) {
+      return reply.code(401).send({ error: 'unauthorized' });
+    }
+
+    return reply.send(agentConfigStore.getConfig());
+  });
+
+  app.put('/api/admin/agent-config', async (request, reply) => {
+    if (!isAdminRequestAuthorized(request.headers['x-admin-token'])) {
+      return reply.code(401).send({ error: 'unauthorized' });
+    }
+
+    const body = request.body as Record<string, unknown>;
+    const updated = await agentConfigStore.updateConfig({
+      autoReplyEnabled: typeof body.autoReplyEnabled === 'boolean' ? body.autoReplyEnabled : undefined,
+      companyName: typeof body.companyName === 'string' ? body.companyName : undefined,
+      objective: typeof body.objective === 'string' ? body.objective : undefined,
+      tone: typeof body.tone === 'string' ? body.tone : undefined,
+      language: typeof body.language === 'string' ? body.language : undefined,
+      maxReplyChars: typeof body.maxReplyChars === 'number' ? body.maxReplyChars : undefined,
+      businessNiche: typeof body.businessNiche === 'string' ? body.businessNiche : undefined,
+      salesType: typeof body.salesType === 'string' ? body.salesType as any : undefined,
+      primaryCTA: typeof body.primaryCTA === 'string' ? body.primaryCTA : undefined,
+      qualificationQuestions: Array.isArray(body.qualificationQuestions) ? body.qualificationQuestions as any : undefined,
+      customPrompt: typeof body.customPrompt === 'string' ? body.customPrompt : undefined,
+      fallbackMessage: typeof body.fallbackMessage === 'string' ? body.fallbackMessage : undefined,
+      emojisEnabled: typeof body.emojisEnabled === 'boolean' ? body.emojisEnabled : undefined,
+      handoffEnabled: typeof body.handoffEnabled === 'boolean' ? body.handoffEnabled : undefined,
+      sendToChatwoot: typeof body.sendToChatwoot === 'boolean' ? body.sendToChatwoot : undefined,
+      sendToSlack: typeof body.sendToSlack === 'boolean' ? body.sendToSlack : undefined,
+      disallowedTerms: Array.isArray(body.disallowedTerms) ? body.disallowedTerms as any : undefined
+    });
+
+    return reply.send(updated);
   });
 
   // ========== WEBHOOK: UAZAPI (WhatsApp Incoming) ==========
@@ -299,9 +386,56 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
         await leadService.updateLead(tenantId, phone, { status: 'HOT' });
       }
 
+      // 8. Gerar e enviar resposta automática (config dinâmica)
+      const agentConfig = agentConfigStore.getConfig();
+      let autoReply: string | undefined;
+      if (agentConfig.autoReplyEnabled && updatedLead) {
+        const responseGenerator = new ResponseGenerator(config.OPENAI_API_KEY, config.OPENAI_MODEL, {
+          companyName: agentConfig.companyName,
+          objective: agentConfig.objective,
+          tone: agentConfig.tone,
+          language: agentConfig.language,
+          maxReplyChars: agentConfig.maxReplyChars,
+          businessNiche: agentConfig.businessNiche,
+          salesType: agentConfig.salesType,
+          primaryCTA: agentConfig.primaryCTA,
+          qualificationQuestions: agentConfig.qualificationQuestions,
+          customPrompt: agentConfig.customPrompt,
+          disallowedTerms: agentConfig.disallowedTerms,
+          fallbackMessage: agentConfig.fallbackMessage,
+          emojisEnabled: agentConfig.emojisEnabled
+        });
+
+        autoReply = await responseGenerator.generateReply({
+          leadName: updatedLead.name || name || 'cliente',
+          incomingMessage: message,
+          intent: intentResult.intent,
+          score: updatedLead.score,
+          conversationStage: updatedLead.conversionStage
+        });
+
+        await uazapiClient.sendMessage({
+          phone,
+          message: autoReply
+        });
+
+        await prisma.message.create({
+          data: {
+            leadId: updatedLead.id,
+            content: autoReply,
+            type: 'outgoing',
+            isAiGenerated: true,
+            intentDetected: intentResult.intent
+          }
+        });
+      }
+
       logger.info(`[WEBHOOK:UAZAPI] ✅ Mensagem processada - Intent: ${intentResult.intent}`);
+ codex/refactor-agent-for-improved-functionality-ujhmxn
       await auditEvent(tenantId, 'webhook_uazapi_processed', true, { phone, intent: intentResult.intent });
       return reply.code(200).send({ success: true, messageId });
+
+ main
     } catch (error) {
       logger.error('[WEBHOOK:UAZAPI] ❌ Erro:', error);
       return reply.code(500).send({ error: String(error) });

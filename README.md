@@ -48,6 +48,12 @@ npm install --legacy-peer-deps
 ```
 
 ### 2. **Configurar Ambiente**
+Você pode usar o template de homologação para VPS:
+```bash
+cp .env.vps.test.example .env
+```
+Depois edite os valores reais (OpenAI, UAZAPI, Chatwoot, banco).
+
 Edite `.env` e adicione as chaves:
 ```bash
 # Obrigatório para operação completa:
@@ -205,7 +211,7 @@ MONGODB_URL=mongodb://root:mongodb_password@localhost:27018/agent-agenda
 
 # APIs (⚠️ ATUALIZAR CHAVES)
 OPENAI_API_KEY=sk-proj-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 UAZAPI_KEY=...
 UAZAPI_URL=https://api.uazapi.com
 
@@ -253,6 +259,56 @@ INTEGRATION_ALLOWED_HOSTS=api.cal.com,graph.facebook.com,api.rd.services
 # Multi-tenant
 # obrigatório enviar header x-tenant-id em todas as rotas de negócio
 ```
+
+---
+
+
+## 🎛️ Personalização do Agente (Prompt + Forma de Falar)
+
+### Onde alterar o prompt de IA
+- **Classificação de intenção**: `src/domain/intent/intent.classifier.ts` (mensagem `role: system`)
+- **Resposta conversacional do agente**: `src/domain/agent/response.generator.ts` (prompt do SDR)
+
+### Onde alterar o jeito que ele fala
+- **Tom e objetivo global**: variáveis no `.env`
+  - `AGENT_TONE`
+  - `AGENT_OBJECTIVE`
+  - `AGENT_COMPANY_NAME`
+  - `AGENT_LANGUAGE`
+  - `AGENT_MAX_REPLY_CHARS`
+- **Mensagens de follow-up automáticas**: `src/application/cron/follow-up-24h.job.ts`
+
+### Ativar/desativar resposta automática
+```env
+AGENT_AUTO_REPLY_ENABLED=true
+```
+
+Quando ativo, o webhook de WhatsApp processa a intenção e também gera uma resposta automática usando OpenAI antes de enviar via UAZAPI.
+
+### Painel HTML para configuração (sem editar .env)
+- Página: `GET /admin/agent-config`
+- API de leitura: `GET /api/admin/agent-config`
+- API de atualização: `PUT /api/admin/agent-config`
+
+Use o subdomínio desejado `sdr-synapasea.sentiia.com.br` no proxy reverso apontando para o serviço da API para gerir tom/prompt do agente em runtime.
+
+Exemplos prontos de Nginx e Traefik estão em `DEPLOYMENT_GUIDE.md` na seção **Subdomínio para o Painel de Configuração do Agente**.
+
+Se quiser proteger a API de configuração, defina no `.env`:
+```env
+ADMIN_CONFIG_TOKEN=seu-token-forte
+```
+
+### Como gerar o token de acesso
+```bash
+# OpenSSL (recomendado)
+openssl rand -hex 32
+
+# ou Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Depois copie o token gerado para `ADMIN_CONFIG_TOKEN` e use no header `x-admin-token` ao salvar/carregar a configuração no painel.
 
 ---
 
@@ -366,7 +422,7 @@ MONGODB_URL=mongodb://localhost:27017/agent
 
 # OpenAI
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 
 # Chatwoot
 CHATWOOT_URL=https://chatwoot.example.com

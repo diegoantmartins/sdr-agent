@@ -46,21 +46,15 @@ const INTENT_KEYWORDS = {
 export class IntentClassifier {
   private openai?: OpenAI;
 
- codex/improve-project-features
   constructor(apiKey: string, private model: string = 'gpt-4o-mini') {
     if (apiKey) {
       this.openai = new OpenAI({ apiKey });
     }
-
-  constructor(apiKey: string, private model: string = 'gpt-5-nano') {
-    this.openai = new OpenAI({ apiKey });
- main
   }
 
   async classify(message: string): Promise<ClassificationResult> {
     const normalizedMsg = message.toLowerCase().trim();
 
-    // Passo 1: Pattern matching rápido
     const patternResult = this.matchPatterns(normalizedMsg);
     if (patternResult.confidence > 0.8) {
       logger.debug(`[IntentClassifier] Pattern match: ${patternResult.intent}`);
@@ -69,66 +63,35 @@ export class IntentClassifier {
 
     if (!this.openai) {
       logger.warn('[IntentClassifier] OpenAI não configurado, usando TRIAGE fallback');
-      return {
-        intent: 'TRIAGE',
-        confidence: 0.4,
-        reasoning: 'OpenAI API key ausente, usando fallback'
-      };
+      return { intent: 'TRIAGE', confidence: 0.4, reasoning: 'OpenAI API key ausente, usando fallback' };
     }
 
-    // Passo 2: LLM classification (fallback)
     try {
-      return await retryAsync(
-        () => this.classifyWithLLM(message),
-        { maxAttempts: 2, delayMs: 500 }
-      );
+      return await retryAsync(() => this.classifyWithLLM(message), { maxAttempts: 2, delayMs: 500 });
     } catch (error) {
       logger.warn('[IntentClassifier] LLM error, using TRIAGE fallback:', error);
-      return {
-        intent: 'TRIAGE',
-        confidence: 0.5,
-        reasoning: 'LLM classification failed, using fallback'
-      };
+      return { intent: 'TRIAGE', confidence: 0.5, reasoning: 'LLM classification failed, using fallback' };
     }
   }
 
   private matchPatterns(message: string): ClassificationResult {
-    // Check BUY_NOW
     for (const keyword of INTENT_KEYWORDS.BUY_NOW) {
       if (message.includes(keyword)) {
-        return {
-          intent: 'BUY_NOW',
-          confidence: 0.95,
-          reasoning: `Detected keyword: "${keyword}"`,
-          triggeredKeywords: [keyword]
-        };
+        return { intent: 'BUY_NOW', confidence: 0.95, reasoning: `Detected keyword: "${keyword}"`, triggeredKeywords: [keyword] };
       }
     }
 
-    // Check SUPPORT
     for (const keyword of INTENT_KEYWORDS.SUPPORT) {
       if (message.includes(keyword)) {
-        return {
-          intent: 'SUPPORT',
-          confidence: 0.85,
-          reasoning: `Detected support keyword: "${keyword}"`,
-          triggeredKeywords: [keyword]
-        };
+        return { intent: 'SUPPORT', confidence: 0.85, reasoning: `Detected support keyword: "${keyword}"`, triggeredKeywords: [keyword] };
       }
     }
 
-    // Default: TRIAGE
-    return {
-      intent: 'TRIAGE',
-      confidence: 0.3,
-      reasoning: 'No pattern match'
-    };
+    return { intent: 'TRIAGE', confidence: 0.3, reasoning: 'No pattern match' };
   }
 
   private async classifyWithLLM(message: string): Promise<ClassificationResult> {
-    if (!this.openai) {
-      throw new Error('OpenAI client não configurado');
-    }
+    if (!this.openai) throw new Error('OpenAI client não configurado');
 
     const completion = await this.openai.chat.completions.create({
       model: this.model,
@@ -165,11 +128,7 @@ Responda APENAS em JSON:
     };
   }
 
-  generateHandoffSummary(
-    intent: IntentType,
-    message: string,
-    leadName: string
-  ): string {
+  generateHandoffSummary(intent: IntentType, message: string, leadName: string): string {
     const summaries: Record<IntentType, string> = {
       BUY_NOW: `🔥 *${leadName} quer contratar agora!*\n"${message}"\n⏰ URGENTE`,
       SUPPORT: `❓ ${leadName} tem dúvidas\n"${message}"\n💡 Pode ser oportunidade`,

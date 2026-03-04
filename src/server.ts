@@ -12,8 +12,6 @@ import { setupAgenda } from './application/cron/agenda-setup';
 import { getUAZAPIClient } from './infra/uazapi/uazapi.client';
 import { chatService } from './services/chatwootService';
 import { isWebhookAuthorized } from './application/webhooks/webhook-auth';
-codex/refactor-agent-for-improved-functionality-ujhmxn
-codex/refactor-agent-for-improved-functionality-ujhmxn
 import { integrationHubService } from './services/integrations/integration-hub.service';
 import {
   IntegrationAction,
@@ -25,12 +23,12 @@ import { assertRole, parseApiKeys } from './shared/utils/auth';
 import { enforceTenantRateLimit } from './shared/utils/rate-limit';
 import { ConversationMetricsService } from './services/metrics/conversation-metrics.service';
 import { commercialEngineService } from './services/commercial/commercial-engine.service';
- main
 
 import { ResponseGenerator } from './domain/agent/response.generator';
 import { AgentConfigStore } from './domain/agent/agent-config.store';
 import { buildAgentConfigPage } from './presentation/admin/agent-config.page';
- main
+import { buildSynapseaAppPage } from './presentation/app/synapsea-app.page';
+import { reportingService } from './domain/reporting/reporting.service';
 
 // Instâncias globais
 let prisma: PrismaClient;
@@ -38,7 +36,6 @@ let app: FastifyInstance;
 let intentClassifier: IntentClassifier;
 let leadService: LeadService;
 let uazapiClient: any;
- codex/refactor-agent-for-improved-functionality-ujhmxn
 let conversationMetricsService: ConversationMetricsService;
 
 function parseAllowedOrigins(originsCsv?: string): string[] {
@@ -128,7 +125,27 @@ async function connectWithRetry(client: PrismaClient): Promise<void> {
 }
 
 let agentConfigStore: AgentConfigStore;
- main
+
+
+async function buildOperationalSnapshot(tenantId?: string) {
+  const whereLead = tenantId ? { tenantId } : {};
+  const whereIncoming = tenantId ? { tenantId, type: 'incoming' as const } : { type: 'incoming' as const };
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const [totalLeads, hotLeads, leadAvg, inboundLast24h] = await Promise.all([
+    prisma.activeLead.count({ where: whereLead }),
+    prisma.activeLead.count({ where: { ...whereLead, score: { gte: 80 } } }),
+    prisma.activeLead.aggregate({ where: whereLead, _avg: { score: true } }),
+    prisma.message.count({ where: { ...whereIncoming, createdAt: { gte: dayAgo } } })
+  ]);
+
+  return {
+    totalLeads,
+    hotLeads,
+    avgScore: Math.round(leadAvg._avg.score || 0),
+    inboundLast24h
+  };
+}
 
 async function initializeApp(): Promise<FastifyInstance> {
   // ========== Database Setup ==========
@@ -226,6 +243,37 @@ async function initializeApp(): Promise<FastifyInstance> {
     }
   });
 
+  // ========== APP: Synapsea Frontend + AI Reports ==========
+  app.get('/app', async (_request, reply) => {
+    return reply.type('text/html; charset=utf-8').send(buildSynapseaAppPage());
+  });
+
+  app.get('/api/app/users', async (_request, reply) => {
+    return reply.send({ users: reportingService.getUsers() });
+  });
+
+  app.get('/api/app/dashboard', async (request, reply) => {
+    const tenantId = (request.headers['x-tenant-id'] as string | undefined) || undefined;
+    const snapshot = await buildOperationalSnapshot(tenantId);
+    return reply.send(reportingService.getDashboard(snapshot));
+  });
+
+  app.post<{ Body: { prompt?: string } }>('/api/app/reports', async (request, reply) => {
+    const prompt = request.body?.prompt?.trim();
+    if (!prompt) {
+      return reply.code(400).send({ error: 'prompt é obrigatório' });
+    }
+
+    if (prompt.length < 12) {
+      return reply.code(400).send({ error: 'prompt muito curto' });
+    }
+
+    const tenantId = (request.headers['x-tenant-id'] as string | undefined) || undefined;
+    const snapshot = await buildOperationalSnapshot(tenantId);
+    const report = await reportingService.generateExecutiveReport(prompt, snapshot);
+    return reply.send({ report, snapshot });
+  });
+
 
 
   const isAdminRequestAuthorized = (headerValue: string | string[] | undefined): boolean => {
@@ -282,20 +330,16 @@ async function initializeApp(): Promise<FastifyInstance> {
   // ========== WEBHOOK: UAZAPI (WhatsApp Incoming) ==========
   app.post('/webhooks/uazapi/message', async (request, reply) => {
     try {
-codex/refactor-agent-for-improved-functionality-ujhmxn
       if (config.REQUIRE_WEBHOOK_SECRETS && !config.UAZAPI_WEBHOOK_SECRET) {
         throw new ValidationError('UAZAPI_WEBHOOK_SECRET é obrigatório quando REQUIRE_WEBHOOK_SECRETS=true');
       }
 
- main
       if (!isWebhookAuthorized(request.headers, { expectedSecret: config.UAZAPI_WEBHOOK_SECRET })) {
         logger.warn('[WEBHOOK:UAZAPI] Tentativa com segredo inválido');
         return reply.code(401).send({ error: 'unauthorized webhook' });
       }
 
- codex/refactor-agent-for-improved-functionality-ujhmxn
       const tenantId = getTenantIdFromHeaders(request.headers as any);
- main
       const { phone, name, message, messageId, timestamp } = request.body as any;
 
       if (!phone || !message) {
@@ -318,11 +362,9 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
 
       // 2. Salvar mensagem (tratar duplicatas de chatwootMessageId)
       let messageRecord;
- codex/improve-project-features
       let isNewMessage = false;
 
       let isDuplicate = false;
- main
       try {
         messageRecord = await prisma.message.create({
           data: {
@@ -345,7 +387,6 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
         }
       }
 
- codex/improve-project-features
       if (isNewMessage) {
         await leadService.incrementMessageCount(phone);
       }
@@ -360,7 +401,6 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
       await leadService.registerIncomingMessage(tenantId, phone);
       await conversationMetricsService.registerMessage(lead.id, 'incoming');
 
- main
       // 3. Sincronizar com Chatwoot (async, não bloqueia resposta)
       chatService.syncMessage({
         phone,
@@ -443,11 +483,9 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
       }
 
       logger.info(`[WEBHOOK:UAZAPI] ✅ Mensagem processada - Intent: ${intentResult.intent}`);
- codex/refactor-agent-for-improved-functionality-ujhmxn
       await auditEvent(tenantId, 'webhook_uazapi_processed', true, { phone, intent: intentResult.intent });
       return reply.code(200).send({ success: true, messageId });
 
- main
     } catch (error) {
       logger.error('[WEBHOOK:UAZAPI] ❌ Erro:', error);
       return reply.code(500).send({ error: String(error) });
@@ -457,20 +495,16 @@ codex/refactor-agent-for-improved-functionality-ujhmxn
   // ========== WEBHOOK: Chatwoot (Message) ==========
   app.post('/webhooks/chatwoot/message-created', async (request, reply) => {
     try {
- codex/refactor-agent-for-improved-functionality-ujhmxn
       if (config.REQUIRE_WEBHOOK_SECRETS && !config.CHATWOOT_WEBHOOK_SECRET) {
         throw new ValidationError('CHATWOOT_WEBHOOK_SECRET é obrigatório quando REQUIRE_WEBHOOK_SECRETS=true');
       }
 
- main
       if (!isWebhookAuthorized(request.headers, { expectedSecret: config.CHATWOOT_WEBHOOK_SECRET })) {
         logger.warn('[WEBHOOK:CHATWOOT] Tentativa com segredo inválido');
         return reply.code(401).send({ error: 'unauthorized webhook' });
       }
 
- codex/refactor-agent-for-improved-functionality-ujhmxn
       const tenantId = getTenantIdFromHeaders(request.headers as any);
- main
       const payload = request.body as any;
       const { message, conversation, contact } = payload;
 
